@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/highlight.min.js"></script>
+    <script src="./cpp_generator.js"></script>
+    <script src="./thirdparty/jszip.min.js"></script>
+    <script src="./thirdparty/FileSaver.min.js"></script>
+
+    <script type="text/javascript">
+        let columns = [{
+            columnName: "CODE",
+            columnDataType: "INTEGER",
+            columnDataLength: 0,
+            dataMemberName: "Code",
+            dataMemberType: "OMPCODE",
+            filterMemberName: "Codes",
+            filterMemberType: "long_set"
+        }, {
+            columnName: "NUM",
+            columnDataType: "VARCHAR2",
+            columnDataLength: 256,
+            dataMemberName: "Num",
+            dataMemberType: "COmpStringT",
+            filterMemberName: "Num",
+            filterMemberType: "CLikeSensString"
+        }];
+
+        function addColumn() {
+            generateColumnsTable();
+        }
+
+        function generateColumnsTable() {
+
+            function clearColumnsTable() {
+                const rows = document.getElementById("columns_table").getElementsByClassName("column_row");
+                for (let i = rows.length - 1; i >= 0; i--) {
+                    rows[i].remove();
+                }
+            }
+
+            clearColumnsTable();
+
+            function addTd(row, child) {
+                const tdName = document.createElement("td");
+                tdName.appendChild(child);
+                row.appendChild(tdName);
+            }
+
+            function createLineEdit(value) {
+                const le = document.createElement("input");
+                le.setAttribute("type", "text");
+                le.setAttribute("size", "15");
+                le.setAttribute("value", value);
+
+                return le;
+            }
+
+            function createComboBox(avOptions, selectedOption) {
+                const cb = document.createElement("select");
+                for (const opt of avOptions) {
+                    const optElement = document.createElement("option");
+                    optElement.innerText = opt;
+                    if (opt === selectedOption) {
+                        optElement.toggleAttribute("selected", true);
+                    }
+                    cb.appendChild(optElement);
+                }
+
+                return cb;
+            }
+
+            function createDataLengthElement(col) {
+                if (col.columnDataType === "VARCHAR2") {
+                    return createLineEdit(col.columnDataLength);
+                } else {
+                    return document.createElement("div");
+                }
+            }
+
+            for (const col of columns) {
+                const row = document.getElementById("columns_table").appendChild(document.createElement("tr"));
+                row.classList.add("column_row");
+
+                addTd(row, createLineEdit(col.columnName));
+
+                const colDataTypeElement = createComboBox(["INTEGER", "VARCHAR2"], col.columnDataType);
+                addTd(row, colDataTypeElement);
+
+                addTd(row, createDataLengthElement(col));
+
+                addTd(row, createLineEdit(col.dataMemberName));
+
+                const colDataMemberTypeElement = createComboBox(["OMPCODE", "COmpStringT"], col.dataMemberType);
+                addTd(row, colDataMemberTypeElement);
+
+                addTd(row, createLineEdit(col.filterMemberName));
+
+                const colFilterMemberTypeElement = createComboBox(["long_set", "CLikeSensString"], col.filterMemberType);
+                addTd(row, colFilterMemberTypeElement);
+            }
+        }
+
+        function generateCode() {
+            const cppCode = generateNewDirectoryCpp(getOpts(), columns);
+            document.getElementById("generated_code").innerHTML = escapeCpp(cppCode);
+            hljs.highlightBlock(document.getElementById("generated_code"));
+        }
+
+        function save() {
+            const opts = getOpts();
+
+            const gen = new DirectoryCppGenerator(getOpts(), columns);
+
+            const zip = new JSZip();
+            const nonUiLibFolder = zip.folder(`${opts.non_ui_lib}`);
+            nonUiLibFolder.file(`${opts.entities}Data.h`, gen.generateDataHeader());
+            nonUiLibFolder.file(`${opts.entities}Service.h`, gen.generateServiceHeader());
+            nonUiLibFolder.file(`${opts.entities}Service.cpp`, gen.generateServiceCpp());
+
+            const uiLibFolder = zip.folder(`${opts.ui_lib}`);
+            uiLibFolder.file(`${opts.entities}Cell.h`, gen.generateCellHeader());
+            uiLibFolder.file(`${opts.entities}Cell.cpp`, gen.generateCellCpp());
+            uiLibFolder.file(`${opts.entities}FilterCell.h`, gen.generateFilterCellHeader());
+            uiLibFolder.file(`${opts.entities}FilterCell.cpp`, gen.generateFilterCellCpp());
+            uiLibFolder.file(`${opts.entities}List.h`, gen.generateListHeader());
+            uiLibFolder.file(`${opts.entities}List.cpp`, gen.generateListCpp());
+            uiLibFolder.file(`${opts.entities}CellPage.ui`, gen.generateCellPageUi());
+            uiLibFolder.file(`${opts.entities}FilterPage.ui`, gen.generateFilterCellPageUi());
+
+            zip.generateAsync({ type: "blob" }).then(function (content) {
+                saveAs(content, `${opts.entities}.zip`);
+            });
+        }
+
+        function getOpts() {
+            const non_ui_lib = document.getElementById("non_ui_lib").value;
+            return {
+                non_ui_lib: non_ui_lib,
+                ui_lib: `${non_ui_lib}UI`,
+                entity: document.getElementById("entity").value,
+                entities: document.getElementById("entities").value,
+            }
+        }
+
+        function escapeCpp(cppStr) {
+            return cppStr.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        window.onload = () => { generateColumnsTable() };
+
+    </script>
+
+    <title>new_directory_template</title>
+</head>
+
+<body>
+    <p><b>$NON-UI-LIB: </b><input type="text" size="40" id="non_ui_lib" value="OmOrdr"></p>
+    <p><b>$ENTITY: </b> <input type="text" size="40" id="entity" value="Stockobj"></p>
+    <p><b>$ENTITIES</b><input type="text" size="40" id="entities" value="Stockobjs"></p>
+
+    Columns:
+    <p>
+        <button onclick="addColumn()">Add column</button>
+    </p>
+
+    <table id="columns_table">
+        <tr>
+            <th>Table Column</th>
+            <th>Oracle Data Type</th>
+            <th>Data Length</th>
+            <th>Data Member Name</th>
+            <th>Data Member Type</th>
+            <th>Filter Member Name</th>
+            <th>Filter Member Type</th>
+        </tr>
+    </table>
+
+    <p>
+        <button onclick="generateCode()">Generate</button>
+        <button onclick="save()">Save</button>
+    </p>
+
+    <pre>
+        <code class="cpp" id="generated_code"></code>
+    </pre>
+</body>
+
+</html>

@@ -110,6 +110,26 @@
             hljs.highlightBlock(document.getElementById("generated_code"));
         }
 
+        function to1251(str) {
+            let res = [];
+            for (var i = 0; i < str.length; i++) {
+                const c = str.charCodeAt(i);
+                if (c > 127) {
+                    if (c > 1024) {
+                        if (c == 1025) {
+                            c = 1016;
+                        } else if (c == 1105) {
+                            c = 1032;
+                        }
+                        res.push(c - 848);
+                    }
+                } else {
+                    res.push(c);
+                }
+            }
+            return new Uint8Array(res);
+        }
+
         function save() {
             const opts = getOpts();
 
@@ -119,18 +139,22 @@
 
             zip.file("instructions.md", gen.generateInstructions());
 
+            const cp1251file = (folder, name, str) => {
+                folder.file(name, to1251(str), { binary: true });
+            }
+
             const nonUiLibFolder = zip.folder(`${opts.non_ui_lib}`);
-            nonUiLibFolder.file(`${opts.entities}Data.h`, gen.generateDataHeader());
-            nonUiLibFolder.file(`${opts.entities}Service.h`, gen.generateServiceHeader());
-            nonUiLibFolder.file(`${opts.entities}Service.cpp`, gen.generateServiceCpp());
+            cp1251file(nonUiLibFolder, `${opts.entities}Data.h`, gen.generateDataHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}Service.h`, gen.generateServiceHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}Service.cpp`, gen.generateServiceCpp());
 
             const uiLibFolder = zip.folder(`${opts.ui_lib}`);
-            uiLibFolder.file(`${opts.entities}Cell.h`, gen.generateCellHeader());
-            uiLibFolder.file(`${opts.entities}Cell.cpp`, gen.generateCellCpp());
-            uiLibFolder.file(`${opts.entities}FilterCell.h`, gen.generateFilterCellHeader());
-            uiLibFolder.file(`${opts.entities}FilterCell.cpp`, gen.generateFilterCellCpp());
-            uiLibFolder.file(`${opts.entities}List.h`, gen.generateListHeader());
-            uiLibFolder.file(`${opts.entities}List.cpp`, gen.generateListCpp());
+            cp1251file(uiLibFolder, `${opts.entities}Cell.h`, gen.generateCellHeader());
+            cp1251file(uiLibFolder, `${opts.entities}Cell.cpp`, gen.generateCellCpp());
+            cp1251file(uiLibFolder, `${opts.entities}FilterCell.h`, gen.generateFilterCellHeader());
+            cp1251file(uiLibFolder, `${opts.entities}FilterCell.cpp`, gen.generateFilterCellCpp());
+            cp1251file(uiLibFolder, `${opts.entities}List.h`, gen.generateListHeader());
+            cp1251file(uiLibFolder, `${opts.entities}List.cpp`, gen.generateListCpp());
             uiLibFolder.file(`${opts.entities}CellPage.ui`, gen.generateCellPageUi());
             uiLibFolder.file(`${opts.entities}FilterPage.ui`, gen.generateFilterCellPageUi());
 

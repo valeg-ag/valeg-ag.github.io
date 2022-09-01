@@ -647,6 +647,26 @@ void Run${this.entities}List( const IMCell& f )
 </ui>\n`;
     }
 
+    generateInstructions() {
+        return `
+        #instructions
+
+Add next lines to to \`${this.ui_lib}/${this.ui_lib}Run.cpp\`:
+
+\`\`\`cpp
+run${this.entities} = "TASK_CODE"fix, // Task Name
+
+// ...
+OMP_RUN( run${this.entities}, Get${this.entities}Filter, Run${this.entities}List )
+\`\`\`
+
+Add next lines to to \`core/OIDs.h\`:
+\`\`\`cpp
+#define OID_${this.entities}Service (${this.non_ui_lib} + ?)
+\`\`\`
+`;
+    }
+
     generateDataStructCode() {
         const members = this.columns.map(col => `\n${TAB}${this.generateDataMemberTypeCode(col)} ${col.dataMemberName};`);
         return `struct ${this.dataStruct()} : CCopyClearBase< ${this.dataStruct()} >\n{${members.join("")}\n};`;

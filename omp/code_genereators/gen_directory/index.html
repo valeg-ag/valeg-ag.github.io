@@ -116,6 +116,9 @@
             const gen = new DirectoryCppGenerator(getOpts(), columns);
 
             const zip = new JSZip();
+
+            zip.file("instructions.md", gen.generateInstructions());
+
             const nonUiLibFolder = zip.folder(`${opts.non_ui_lib}`);
             nonUiLibFolder.file(`${opts.entities}Data.h`, gen.generateDataHeader());
             nonUiLibFolder.file(`${opts.entities}Service.h`, gen.generateServiceHeader());

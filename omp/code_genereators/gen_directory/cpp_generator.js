@@ -7,6 +7,8 @@ class DirectoryCppGenerator {
     constructor(opts, columns) {
         this.entity = opts.entity;
         this.entities = opts.entities;
+        this.entity_hr_name = opts.entity_hr_name;
+        this.entities_hr_name = opts.entities_hr_name;
         this.non_ui_lib = opts.non_ui_lib;
         this.ui_lib = opts.ui_lib;
         this.columns = columns;
@@ -39,7 +41,13 @@ ${this.generateFilterCellCpp()}\n\n\n
 ${this.generateListHeader()}\n\n\n
 // ${this.ui_lib}/${this.entities}List.cpp
 ///////////////////////////////////////////////////////////////////////////////
-${this.generateListCpp()}`
+${this.generateListCpp()}
+// ${this.ui_lib}/${this.entities}UiService.h
+///////////////////////////////////////////////////////////////////////////////
+${this.generateUiServiceHeader()}
+// ${this.ui_lib}/${this.entities}UiService.cpp
+///////////////////////////////////////////////////////////////////////////////
+${this.generateUiServiceCpp()}`
     }
 
     generateDataHeader() {
@@ -59,6 +67,7 @@ struct I${this.entities}Service : IOmpUnknown
   virtual void Update( ${this.dataStruct()}& data ) = 0;
   virtual void Delete( const ${this.dataStruct()}& data ) = 0;
 
+  virtual ${this.dataStruct()} LoadByCode( OMPCODE code ) = 0;
   virtual omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) = 0;
 };
 
@@ -88,12 +97,14 @@ public:
   void Update( ${this.dataStruct()}& data ) override;
   void Delete( const ${this.dataStruct()}& data ) override;
 
+  ${this.dataStruct()} LoadByCode( OMPCODE code ) override;
   omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) override;
 };
 }
 
 OMP_OBJECT_ENTRY_AUTO_NS( OID_${this.entities}Service, ${this.namespace()}, ServiceImpl );
 
+// clang-format off
 void FdMakeWhere( TwQuery& query, const ${this.filterStruct()}& flt )
 {
   using namespace omp::sql;
@@ -101,6 +112,7 @@ void FdMakeWhere( TwQuery& query, const ${this.filterStruct()}& flt )
   filtering( query, flt.Codes, _ac( "A", "CODE" ) );
   filtering( query, flt.Num, _ac( "A", "NUM" ) );
 }
+// clang-format on
 
 namespace ${this.namespace()}
 {
@@ -119,6 +131,11 @@ void ServiceImpl::Update( ${this.dataStruct()}& data )
 void ServiceImpl::Delete( const ${this.dataStruct()}& data )
 {
   StorageT().Delete( data );
+}
+
+${this.dataStruct()} ServiceImpl::LoadByCode( OMPCODE code )
+{
+  return StorageT().LoadByCode( code );
 }
 
 omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByFilter( const ${this.filterStruct()}& flt )
@@ -205,7 +222,7 @@ Cell::Cell( const Cell& src )
 
 void Cell::Clear()
 {
-    ${this.dataStruct()}::clear();
+  ${this.dataStruct()}::clear();
   omp::SmartClearBase( *this );
 }
 
@@ -264,7 +281,7 @@ void Cell::EnumPropertyPages( MPropertyPageArray& pages )
 
 CString Cell::GetCaptionName()
 {
-  return "CAPTION"fix;
+  return "${this.entity_hr_name}";
 }
 
 bool Cell::GetStyle( CGXStyle& style, OMPCODE HID, CGXStyle& hStyle, MDataManager* pMng, bool readOnly )
@@ -294,6 +311,7 @@ void UiCellPage::doDataExchange( QtDataExchange& dx )
 #include "${this.dataHeaderFilePath()}"
 #include "uicore/KMM/MQtProperties.h"
 #include "uicore/KMM/MXMLFilter.h"
+#include "uicore/MBrowserSupport.h"
 
 namespace ${this.namespace()}
 {
@@ -302,7 +320,8 @@ class FilterCell : public ${this.filterStruct()},
                    public IMProperties,
                    public IMQtProperties,
                    public IMXMLFilter,
-                   public IMHeader
+                   public IMHeader,
+                   public IMBrowserSupport
 {
 public:
   FilterCell();
@@ -399,7 +418,7 @@ public:
 
 CString FilterCell::GetCaptionName()
 {
-  return "CAPTION"fix;
+  return "${this.entities_hr_name}";
 }
 
 void FilterCell::EnumPropertyPages( MPropertyPageArray& pages )
@@ -453,12 +472,75 @@ public:
   List();
   ~List() override;
 
+  void GetReportCaptionStr( CString& caption ) override;
+
   void LoadData( OMPCODE reporttype, IMCell* flt ) override;
 
   IMCell* GetNewChild() override;
 
   OMP_DECLARE_PRIVATE( List );
 };
+}\n`;
+    }
+
+    generateUiServiceHeader() {
+        return `#pragma once
+#include "OIDs.h"
+#include "${this.non_ui_lib}/${this.entities}Data.h"
+
+struct ${this.entities}BrowserParams : CCopyClearBase< ${this.entities}BrowserParams >
+{
+  bool IsMultiSelect{ false };
+};
+
+struct I${this.entities}UiService : IOmpUnknown
+{
+  virtual omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()} flt, const ${this.entities}BrowserParams& params ) = 0;
+};
+
+DECLARE_DEFAULT_OID( I${this.entities}UiService, OID_${this.entities}UiService );\n`;
+    }
+
+    generateUiServiceCpp() {
+        return `#include "stdafx.h"
+
+#include "${this.entities}Cell.h"
+#include "${this.entities}FilterCell.h"
+#include "${this.entities}List.h"
+#include "${this.entities}UiService.h"
+#include "uicore/BrowserProvider.h"
+
+namespace ${this.namespace()}
+{
+class ServiceImpl : public I${this.entities}UiService
+{
+public:
+  omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()} flt, const ${this.entities}BrowserParams& params ) override;
+};
+}
+
+OMP_OBJECT_ENTRY_AUTO_NS( OID_${this.entities}UiService, ${this.namespace()}, ServiceImpl );
+
+namespace ${this.namespace()}
+{
+omp::shared_vec< ${this.dataStruct()} >
+ServiceImpl::RunBrowser( const ${this.filterStruct()} flt, const ${this.entities}BrowserParams& params )
+{
+  FilterCell filter;
+  List list;
+
+  CBrowserProvider browserProvider{ list, filter };
+  browserProvider.SetMultiSelect( params.IsMultiSelect );
+
+  if( IDOK != browserProvider.DoModal() )
+    return {};
+
+  omp::shared_vec< ${this.dataStruct()} > result;
+  for( const auto* cell : omp::cast_container< Cell* >( browserProvider.GetSelected() ) )
+    result.emplace_back( std::make_shared< ${this.dataStruct()} >( *cell ) );
+
+  return result;
+}
 }\n`;
     }
 
@@ -489,6 +571,11 @@ List::List() : d{ *new Private{ *this } }
 List::~List()
 {
   delete &d;
+}
+
+void List::GetReportCaptionStr( CString& caption )
+{
+  caption = "${this.entities_hr_name}";
 }
 
 void List::LoadData( OMPCODE reporttype, IMCell* flt )
@@ -654,7 +741,7 @@ void Run${this.entities}List( const IMCell& f )
 Add next lines to to \`${this.ui_lib}/${this.ui_lib}Run.cpp\`:
 
 \`\`\`cpp
-run${this.entities} = "TASK_CODE"fix, // Task Name
+run${this.entities} = "TASK_CODE"fix, // ${this.entities_hr_name}
 
 // ...
 OMP_RUN( run${this.entities}, Get${this.entities}Filter, Run${this.entities}List )
@@ -663,6 +750,8 @@ OMP_RUN( run${this.entities}, Get${this.entities}Filter, Run${this.entities}List
 Add next lines to to \`core/OIDs.h\`:
 \`\`\`cpp
 #define OID_${this.entities}Service (${this.non_ui_lib} + ?)
+
+#define OID_${this.entities}UiService (${this.ui_lib} + ?)
 \`\`\`
 `;
     }

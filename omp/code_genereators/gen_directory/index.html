@@ -155,6 +155,8 @@
             cp1251file(uiLibFolder, `${opts.entities}FilterCell.cpp`, gen.generateFilterCellCpp());
             cp1251file(uiLibFolder, `${opts.entities}List.h`, gen.generateListHeader());
             cp1251file(uiLibFolder, `${opts.entities}List.cpp`, gen.generateListCpp());
+            cp1251file(uiLibFolder, `${opts.entities}UiService.h`, gen.generateUiServiceHeader());
+            cp1251file(uiLibFolder, `${opts.entities}UiService.cpp`, gen.generateUiServiceCpp());
             uiLibFolder.file(`${opts.entities}CellPage.ui`, gen.generateCellPageUi());
             uiLibFolder.file(`${opts.entities}FilterPage.ui`, gen.generateFilterCellPageUi());
 
@@ -170,7 +172,9 @@
                 ui_lib: `${non_ui_lib}UI`,
                 entity: document.getElementById("entity").value,
                 entities: document.getElementById("entities").value,
-            }
+                entity_hr_name: document.getElementById("entity_hr_name").value,
+                entities_hr_name: document.getElementById("entities_hr_name").value,
+            };
         }
 
         function escapeCpp(cppStr) {
@@ -190,8 +194,14 @@
 
 <body>
     <p><b>$NON-UI-LIB: </b><input type="text" size="40" id="non_ui_lib" value="OmOrdr"></p>
-    <p><b>$ENTITY: </b> <input type="text" size="40" id="entity" value="Stockobj"></p>
-    <p><b>$ENTITIES</b><input type="text" size="40" id="entities" value="Stockobjs"></p>
+    <p>
+        <b>$ENTITY: </b> <input type="text" size="40" id="entity" value="Stockobj">
+        <b>$ENTITY (Rus): </b> <input type="text" size="40" id="entity_hr_name" value="Объект учета">
+    </p>
+    <p>
+        <b>$ENTITIES: </b><input type="text" size="40" id="entities" value="Stockobjs">
+        <b>$ENTITIES (Rus): </b> <input type="text" size="40" id="entities_hr_name" value="Объекты учета">
+    </p>
 
     Columns:
     <p>

@@ -67,8 +67,8 @@ ${this.generateFilterStructCode()}\n`
 
     generateServiceHeader() {
         return `#pragma once
+#include "./${this.dataHeaderFileName()}"
 #include "OIDs.h"
-#include "${this.dataHeaderFileName()}"
 
 struct I${this.entities}Service : IOmpUnknown
 {
@@ -87,8 +87,8 @@ DECLARE_DEFAULT_OID( I${this.entities}Service, OID_${this.entities}Service );\n`
     generateServiceCpp() {
         return `#include "stdafx.h"
 
+#include "./${this.entities}Service.h"
 #include "OmUtils/SQLUtils.h"
-#include "${this.entities}Service.h"
 #include "core/MFieldDescStorage.h"
 
 namespace ${this.namespace()}
@@ -173,8 +173,8 @@ omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByFilter( const ${this.
 
     generateRestHeader() {
         return `#pragma once
+#include "./${this.dataHeaderFileName()}"
 #include "OmUtils/RestObjI.h"
-#include "${this.dataHeaderFileName()}"
 
 namespace ${this.namespace()}
 {
@@ -203,11 +203,11 @@ public:
     generateRestCpp() {
         return `#include "stdafx.h"
 
+#include "./${this.entities}Rest.h"
+#include "./${this.entities}RestAttrs.h"
+#include "./${this.entities}Service.h"
 #include "OmUtils/RestObjExchange.h"
 #include "OmUtils/RestObjUtils.h"
-#include "${this.entities}Rest.h"
-#include "${this.entities}RestAttrs.h"
-#include "${this.entities}Service.h"
 #include "core/coretcontainerutils.h"
 
 namespace ${this.namespace()}
@@ -309,8 +309,8 @@ public:
     generateCellCpp() {
         return `#include "stdafx.h"
 
-#include "${this.entities}Cell.h"
-#include "${this.entities}FilterCell.h"
+#include "./${this.entities}Cell.h"
+#include "./${this.entities}FilterCell.h"
 #include "OmOrdr/${this.entities}Service.h"
 #include "uicore/KMM/MQtPropertyPage.h"
 #include "uicore/SmartClearCopyCell.h"
@@ -442,7 +442,8 @@ class FilterCell : public ${this.filterStruct()},
                    public IMQtProperties,
                    public IMXMLFilter,
                    public IMHeader,
-                   public IMBrowserSupport
+                   public IMBrowserSupport,
+                   public IMFormManager
 {
 public:
   FilterCell();
@@ -466,6 +467,9 @@ public:
   // IMHeader
   void GetHeader( ITTPArray< CGXStyle >& header ) override;
 
+  // IMFormManager
+  void EnumDataTypes( ITLongArray& types ) override;
+
   enum enHids
   {
     Hid_Num = 1,
@@ -477,7 +481,7 @@ public:
     generateFilterCellCpp() {
         return `#include "stdafx.h"
 
-#include "${this.entities}FilterCell.h"
+#include "./${this.entities}FilterCell.h"
 #include "uicore/KMM/MQtPropertyPage.h"
 #include "uicore/SmartClearCopyCell.h"
 
@@ -570,6 +574,9 @@ void FilterCell::GetHeader( ITTPArray< CGXStyle >& header )
   IMHeader::SetWrapText( header, true );
 }
 
+void FilterCell::EnumDataTypes( ITLongArray& types )
+{}
+
 void UiFilterPage::onInitDialog( MQtPropertyPageWidget* wgt )
 {}
 
@@ -599,78 +606,24 @@ public:
 
   IMCell* GetNewChild() override;
 
+  void DefineCustomLocalMenu( CMenu& menu, ROWCOL row, ROWCOL col ) override;
+
+  void OnMovedCurrentRow( ROWCOL row ) override;
+  BOOL EnableRefershReportView() override;
+
   OMP_DECLARE_PRIVATE( List );
 };
-}\n`;
-    }
-
-    generateUiServiceHeader() {
-        return `#pragma once
-#include "OIDs.h"
-#include "${this.non_ui_lib}/${this.entities}Data.h"
-
-struct ${this.entities}BrowserParams : CCopyClearBase< ${this.entities}BrowserParams >
-{
-  bool IsMultiSelect{ false };
-};
-
-struct I${this.entities}UiService : IOmpUnknown
-{
-  virtual omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params ) = 0;
-};
-
-DECLARE_DEFAULT_OID( I${this.entities}UiService, OID_${this.entities}UiService );\n`;
-    }
-
-    generateUiServiceCpp() {
-        return `#include "stdafx.h"
-
-#include "${this.entities}Cell.h"
-#include "${this.entities}FilterCell.h"
-#include "${this.entities}List.h"
-#include "${this.entities}UiService.h"
-#include "uicore/BrowserProvider.h"
-
-namespace ${this.namespace()}
-{
-class ServiceImpl : public I${this.entities}UiService
-{
-public:
-  omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params ) override;
-};
-}
-
-OMP_OBJECT_ENTRY_AUTO_NS( OID_${this.entities}UiService, ${this.namespace()}, ServiceImpl );
-
-namespace ${this.namespace()}
-{
-omp::shared_vec< ${this.dataStruct()} > ServiceImpl::RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params )
-{
-  FilterCell filter;
-  List list;
-
-  CBrowserProvider browserProvider{ list, filter };
-  browserProvider.SetMultiSelect( params.IsMultiSelect );
-
-  if( IDOK != browserProvider.DoModal() )
-    return {};
-
-  omp::shared_vec< ${this.dataStruct()} > result;
-  for( const auto* cell : omp::cast_container< Cell* >( browserProvider.GetSelected() ) )
-    result.emplace_back( std::make_shared< ${this.dataStruct()} >( *cell ) );
-
-  return result;
-}
 }\n`;
     }
 
     generateListCpp() {
         return `#include "stdafx.h"
 
+#include "./${this.entities}Cell.h"
+#include "./${this.entities}FilterCell.h"
+#include "./${this.entities}List.h"
 #include "${this.non_ui_lib}/${this.entities}Service.h"
-#include "${this.entities}Cell.h"
-#include "${this.entities}FilterCell.h"
-#include "${this.entities}List.h"
+#include "OmUtilsUI/BaseMenuUtils.h"
 
 namespace ${this.namespace()}
 {
@@ -715,6 +668,24 @@ IMCell* List::GetNewChild()
 {
   return new Cell();
 }
+
+void List::DefineCustomLocalMenu( CMenu& menu, ROWCOL row, ROWCOL col )
+{
+  // add_omp_menu_cmd( menu, "Команда", [ this ]() { d.OnCmdHandler(); } );
+}
+
+void List::OnMovedCurrentRow( ROWCOL row )
+{
+  MDataManager::OnMovedCurrentRow( row );
+
+  // Cell* cell = GetRowDataCast( row );
+  // SendReportsReload( cell ? cell->Code : -1, 0, ID_DATATYPE_YOUR_DT );
+}
+
+BOOL List::EnableRefershReportView()
+{
+  return TRUE;
+}
 }
 
 IMCell* Get${this.entities}Filter( const OmpReportParams& )
@@ -724,7 +695,74 @@ IMCell* Get${this.entities}Filter( const OmpReportParams& )
 
 void Run${this.entities}List( const IMCell& f )
 {
-  RunOMPDocReport( RUNTIME_CLASS( ${this.namespace()}::List ), f.Clone() );
+  RunOMPFormReport( RUNTIME_CLASS( ${this.namespace()}::List ), f.Clone() );
+}\n`;
+    }
+
+    generateUiServiceHeader() {
+        return `#pragma once
+#include "OIDs.h"
+#include "${this.non_ui_lib}/${this.entities}Data.h"
+
+struct ${this.entities}BrowserParams : CCopyClearBase< ${this.entities}BrowserParams >
+{
+  bool IsMultiSelect{ false };
+};
+
+struct I${this.entities}UiService : IOmpUnknown
+{
+  virtual void RunList( const ${this.filterStruct()}& flt ) = 0;
+  virtual omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params ) = 0;
+};
+
+DECLARE_DEFAULT_OID( I${this.entities}UiService, OID_${this.entities}UiService );\n`;
+    }
+
+    generateUiServiceCpp() {
+        return `#include "stdafx.h"
+
+#include "./${this.entities}Cell.h"
+#include "./${this.entities}FilterCell.h"
+#include "./${this.entities}List.h"
+#include "./${this.entities}UiService.h"
+#include "uicore/BrowserProvider.h"
+
+namespace ${this.namespace()}
+{
+class ServiceImpl : public I${this.entities}UiService
+{
+public:
+  void RunList( const ${this.filterStruct()}& flt ) override;
+  omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params ) override;
+};
+}
+
+OMP_OBJECT_ENTRY_AUTO_NS( OID_${this.entities}UiService, ${this.namespace()}, ServiceImpl );
+
+namespace ${this.namespace()}
+{
+void ServiceImpl::RunList( const ${this.filterStruct()}& flt )
+{
+  RunOMPFormReport( RUNTIME_CLASS( List ), new FilterCell( flt ) );
+}
+
+omp::shared_vec< ${this.dataStruct()} > ServiceImpl::RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params )
+{
+  FilterCell filter;
+  List list;
+
+  CBrowserProvider browserProvider{ list, filter };
+  browserProvider.SetMultiSelect( params.IsMultiSelect );
+
+  if( IDOK != browserProvider.DoModal() )
+    return {};
+
+  omp::shared_vec< ${this.dataStruct()} > result;
+  for( const auto* cell : omp::cast_container< Cell* >( browserProvider.GetSelected() ) )
+    result.emplace_back( std::make_shared< ${this.dataStruct()} >( *cell ) );
+
+  return result;
+}
 }\n`;
     }
 

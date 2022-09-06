@@ -24,6 +24,15 @@ ${this.generateServiceHeader()}\n\n\n
 // ${this.non_ui_lib}/${this.entities}Service.cpp
 ///////////////////////////////////////////////////////////////////////////////
 ${this.generateServiceCpp()}\n\n\n
+// ${this.non_ui_lib}/${this.entities}RestAttrs.h
+///////////////////////////////////////////////////////////////////////////////
+${this.generateRestAttrsHeader()}\n\n\n
+// ${this.non_ui_lib}/${this.entities}Rest.h
+///////////////////////////////////////////////////////////////////////////////
+${this.generateRestHeader()}\n\n\n
+// ${this.non_ui_lib}/${this.entities}Rest.cpp
+///////////////////////////////////////////////////////////////////////////////
+${this.generateRestCpp()}\n\n\n
 // ${this.ui_lib}/${this.entities}Cell.h
 ///////////////////////////////////////////////////////////////////////////////
 ${this.generateCellHeader()}\n\n\n
@@ -67,6 +76,7 @@ struct I${this.entities}Service : IOmpUnknown
   virtual void Update( ${this.dataStruct()}& data ) = 0;
   virtual void Delete( const ${this.dataStruct()}& data ) = 0;
 
+  virtual omp::shared_vec< ${this.dataStruct()} > LoadByCodes( std::set< OMPCODE > codes ) = 0;
   virtual ${this.dataStruct()} LoadByCode( OMPCODE code ) = 0;
   virtual omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) = 0;
 };
@@ -97,6 +107,7 @@ public:
   void Update( ${this.dataStruct()}& data ) override;
   void Delete( const ${this.dataStruct()}& data ) override;
 
+  omp::shared_vec< ${this.dataStruct()} > LoadByCodes( std::set< OMPCODE > codes ) override;
   ${this.dataStruct()} LoadByCode( OMPCODE code ) override;
   omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) override;
 };
@@ -138,9 +149,119 @@ ${this.dataStruct()} ServiceImpl::LoadByCode( OMPCODE code )
   return StorageT().LoadByCode( code );
 }
 
+omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByCodes( std::set< OMPCODE > codes )
+{
+  ${this.filterStruct()} flt;
+  flt.Codes = std::move( codes );
+
+  return LoadByFilter( flt );
+}
+
 omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByFilter( const ${this.filterStruct()}& flt )
 {
   return StorageT().LoadByFilterShared( flt );
+}
+}\n`;
+    }
+
+    generateRestAttrsHeader() {
+        return `#pragma once
+
+#define ${this.entity}RestAttr_Code    "code"
+#define ${this.entity}RestAttr_Num     "num"\n`;
+    }
+
+    generateRestHeader() {
+        return `#pragma once
+#include "OmUtils/RestObjI.h"
+#include "${this.dataHeaderFileName()}"
+
+namespace ${this.namespace()}
+{
+class RestObject : public IMCell, public rest::IObject, public ${this.dataStruct()}
+{
+public:
+  RestObject();
+  explicit RestObject( const RestObject& src );
+  explicit RestObject( const ${this.dataStruct()}& src );
+
+  void Clear() override;
+  void Copy( const IMCell& src ) override;
+  IMCell* Clone() const override;
+
+  void ProvideRestObjectAttrs( rest::ExchangeItemList& itemlist ) override;
+};
+
+class RestLoader : public rest::IDataLoader
+{
+public:
+  omp::vector< rest::ObjectPointer > LoadRestData( rest::IFilter* filter, rest::RestDataDesc& dataDesc ) override;
+};
+}\n`;
+    }
+
+    generateRestCpp() {
+        return `#include "stdafx.h"
+
+#include "OmUtils/RestObjExchange.h"
+#include "OmUtils/RestObjUtils.h"
+#include "${this.entities}Rest.h"
+#include "${this.entities}RestAttrs.h"
+#include "${this.entities}Service.h"
+#include "core/coretcontainerutils.h"
+
+namespace ${this.namespace()}
+{
+RestObject::RestObject()
+{
+  Clear();
+}
+
+RestObject::RestObject( const RestObject& src )
+{
+  Copy( src );
+}
+
+RestObject::RestObject( const ${this.dataStruct()}& src )
+{
+  Clear();
+  ${this.dataStruct()}::copy( src );
+}
+
+void RestObject::Clear()
+{
+    ${this.dataStruct()}::clear();
+}
+
+void RestObject::Copy( const IMCell& src )
+{
+  const RestObject& s = omp::cast( src );
+  ${this.dataStruct()}::copy( s );
+}
+
+IMCell* RestObject::Clone() const
+{
+  return new RestObject{ *this };
+}
+
+void RestObject::ProvideRestObjectAttrs( rest::ExchangeItemList& itemlist )
+{
+  itemlist.SetIntegerAttr( ${this.entity}RestAttr_Code, "Код", &Code );
+  itemlist.SetStringAttr( ${this.entity}RestAttr_Num, "Номер", &Num );
+}
+
+omp::vector< rest::ObjectPointer > RestLoader ::LoadRestData( rest::IFilter* filter, rest::RestDataDesc& dataDesc )
+{
+  rest::FilterCodes* f = omp::cast( filter );
+  if( !f )
+    rest::Raise::NullFilter();
+
+  COmpPtr< I${this.entities}Service > service;
+  auto loadedDataVec{ service->LoadByCodes( omp::to_set( f->Codes ) ) };
+
+  auto result{ omp::to_vec( loadedDataVec, []( auto& data ) { return std::make_shared< RestObject >( *data ); } ) };
+
+  return omp::to_vec( result, []( auto& data ) { return std::dynamic_pointer_cast< rest::IObject >( data ); } );
 }
 }\n`;
     }
@@ -495,7 +616,7 @@ struct ${this.entities}BrowserParams : CCopyClearBase< ${this.entities}BrowserPa
 
 struct I${this.entities}UiService : IOmpUnknown
 {
-  virtual omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()} flt, const ${this.entities}BrowserParams& params ) = 0;
+  virtual omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params ) = 0;
 };
 
 DECLARE_DEFAULT_OID( I${this.entities}UiService, OID_${this.entities}UiService );\n`;
@@ -515,7 +636,7 @@ namespace ${this.namespace()}
 class ServiceImpl : public I${this.entities}UiService
 {
 public:
-  omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()} flt, const ${this.entities}BrowserParams& params ) override;
+  omp::shared_vec< ${this.dataStruct()} > RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params ) override;
 };
 }
 
@@ -523,8 +644,7 @@ OMP_OBJECT_ENTRY_AUTO_NS( OID_${this.entities}UiService, ${this.namespace()}, Se
 
 namespace ${this.namespace()}
 {
-omp::shared_vec< ${this.dataStruct()} >
-ServiceImpl::RunBrowser( const ${this.filterStruct()} flt, const ${this.entities}BrowserParams& params )
+omp::shared_vec< ${this.dataStruct()} > ServiceImpl::RunBrowser( const ${this.filterStruct()}& flt, const ${this.entities}BrowserParams& params )
 {
   FilterCell filter;
   List list;

@@ -147,6 +147,9 @@
             cp1251file(nonUiLibFolder, `${opts.entities}Data.h`, gen.generateDataHeader());
             cp1251file(nonUiLibFolder, `${opts.entities}Service.h`, gen.generateServiceHeader());
             cp1251file(nonUiLibFolder, `${opts.entities}Service.cpp`, gen.generateServiceCpp());
+            cp1251file(nonUiLibFolder, `${opts.entities}RestAttrs.h`, gen.generateRestAttrsHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}Rest.h`, gen.generateRestHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}Rest.cpp`, gen.generateRestCpp());
 
             const uiLibFolder = zip.folder(`${opts.ui_lib}`);
             cp1251file(uiLibFolder, `${opts.entities}Cell.h`, gen.generateCellHeader());

@@ -150,6 +150,8 @@
             cp1251file(nonUiLibFolder, `${opts.entities}RestAttrs.h`, gen.generateRestAttrsHeader());
             cp1251file(nonUiLibFolder, `${opts.entities}Rest.h`, gen.generateRestHeader());
             cp1251file(nonUiLibFolder, `${opts.entities}Rest.cpp`, gen.generateRestCpp());
+            cp1251file(nonUiLibFolder, `${opts.entities}XmlExchanger.h`, gen.generateXmlExchangerHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}XmlExchanger.cpp`, gen.generateXmlExchangerCpp());
 
             const uiLibFolder = zip.folder(`${opts.ui_lib}`);
             cp1251file(uiLibFolder, `${opts.entities}Cell.h`, gen.generateCellHeader());

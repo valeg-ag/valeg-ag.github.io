@@ -33,6 +33,12 @@ ${this.generateRestHeader()}\n\n\n
 // ${this.non_ui_lib}/${this.entities}Rest.cpp
 ///////////////////////////////////////////////////////////////////////////////
 ${this.generateRestCpp()}\n\n\n
+// ${this.non_ui_lib}/${this.entities}XmlExchanger.h
+///////////////////////////////////////////////////////////////////////////////
+${this.generateXmlExchangerHeader()}\n\n\n
+// ${this.non_ui_lib}/${this.entities}XmlExchanger.cpp
+///////////////////////////////////////////////////////////////////////////////
+${this.generateXmlExchangerCpp()}\n\n\n
 // ${this.ui_lib}/${this.entities}Cell.h
 ///////////////////////////////////////////////////////////////////////////////
 ${this.generateCellHeader()}\n\n\n
@@ -79,6 +85,8 @@ struct I${this.entities}Service : IOmpUnknown
   virtual omp::shared_vec< ${this.dataStruct()} > LoadByCodes( std::set< OMPCODE > codes ) = 0;
   virtual ${this.dataStruct()} LoadByCode( OMPCODE code ) = 0;
   virtual omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) = 0;
+
+  virtual std::unique_ptr< IMXmlExchange > GetXmlExchanger( const ${this.dataStruct()}& data ) = 0;
 };
 
 DECLARE_DEFAULT_OID( I${this.entities}Service, OID_${this.entities}Service );\n`
@@ -88,6 +96,7 @@ DECLARE_DEFAULT_OID( I${this.entities}Service, OID_${this.entities}Service );\n`
         return `#include "stdafx.h"
 
 #include "./${this.entities}Service.h"
+#include "./${this.entities}XmlExchanger.h"
 #include "OmUtils/SQLUtils.h"
 #include "core/MFieldDescStorage.h"
 
@@ -110,6 +119,8 @@ public:
   omp::shared_vec< ${this.dataStruct()} > LoadByCodes( std::set< OMPCODE > codes ) override;
   ${this.dataStruct()} LoadByCode( OMPCODE code ) override;
   omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) override;
+
+  std::unique_ptr< IMXmlExchange > GetXmlExchanger( const ${this.dataStruct()}& data ) override;
 };
 }
 
@@ -127,7 +138,7 @@ void FdMakeWhere( TwQuery& query, const ${this.filterStruct()}& flt )
 
 namespace ${this.namespace()}
 {
-using StorageT = StandardFdStorage< FdImpl, ${this.dataStruct()}, ${this.filterStruct()} >;
+using StorageT = XmlHistoryFdStorage< FdImpl, ${this.dataStruct()}, ${this.filterStruct()}, XmlExchanger >;
 
 void ServiceImpl::Insert( ${this.dataStruct()}& data )
 {
@@ -160,6 +171,11 @@ omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByCodes( std::set< OMPC
 omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByFilter( const ${this.filterStruct()}& flt )
 {
   return StorageT().LoadByFilterShared( flt );
+}
+
+std::unique_ptr< IMXmlExchange > ServiceImpl::GetXmlExchanger( const ${this.dataStruct()} & data )
+{
+  return std::make_unique< XmlExchanger >( data );
 }
 }\n`;
     }
@@ -266,9 +282,106 @@ omp::vector< rest::ObjectPointer > RestLoader ::LoadRestData( rest::IFilter* fil
 }\n`;
     }
 
+    generateXmlExchangerHeader() {
+        return `#pragma once
+#include "./${this.dataHeaderFileName()}"
+#include "core/kmm/MXmlExchange.h"
+
+namespace ${this.namespace()}
+{
+class XmlExchanger : public ${this.dataStruct()}, public IMCell, public IMXmlExchange
+{
+public:
+  XmlExchanger();
+  explicit XmlExchanger( const XmlExchanger& src );
+  explicit XmlExchanger( const ${this.dataStruct()}& src );
+
+  // IMCell
+  void Clear() override;
+  void Copy( const IMCell& src ) override;
+  IMCell* Clone() const override;
+  OMPCODE* GetCodePtr() override;
+
+  // IMXmlExchange
+  OMPCODE GetXmlDocType() override;
+  void DoXmlExchange( CXmlDataExchange& dx ) override;
+  bool SaveHistoryEnabled() override;
+};
+}\n`;
+    }
+
+    generateXmlExchangerCpp() {
+        return `#include "stdafx.h"
+
+#include "./${this.entities}XmlExchanger.h"
+#include "OmMiscUI/XmlDocIDs.h"
+#include "OmUtils/CustomDXML.h"
+#include "core/kmm/XmlExchangeRegister.h"
+
+REGISTER_XML_EXCHANGER_TYPE( XmlDoc_${this.entity}, ${this.namespace()}::XmlExchanger );
+
+namespace ${this.namespace()}
+{
+XmlExchanger::XmlExchanger()
+{
+  Clear();
+}
+
+XmlExchanger::XmlExchanger( const XmlExchanger& src )
+{
+  Copy( src );
+}
+
+XmlExchanger::XmlExchanger( const ${this.dataStruct()}& src )
+{
+  Clear();
+  ${this.dataStruct()}::copy( src );
+}
+
+void XmlExchanger::Clear()
+{
+  XmlExchangeClear();
+  ${this.dataStruct()}::clear();
+}
+
+void XmlExchanger::Copy( const IMCell& src )
+{
+  const auto& s = dynamic_cast< const XmlExchanger& >( src );
+  XmlExchangeCopy( s );
+  ${this.dataStruct()}::copy( s );
+}
+
+IMCell* XmlExchanger::Clone() const
+{
+  return new XmlExchanger( *this );
+}
+
+OMPCODE* XmlExchanger::GetCodePtr()
+{
+  return &Code;
+}
+
+OMPCODE XmlExchanger::GetXmlDocType()
+{
+  return XmlDoc_${this.entity};
+}
+
+void XmlExchanger::DoXmlExchange( CXmlDataExchange& dx )
+{
+  DDXml_EOmpString( dx, "Поле", DataMember );
+}
+
+bool XmlExchanger::SaveHistoryEnabled()
+{
+  return true;
+}
+}\n`;
+    }
+
     generateCellHeader() {
         return `#pragma once
 #include "${this.dataHeaderFilePath()}"
+#include "core/kmm/MXmlExchange.h"
 #include "uicore/KMM/MQtProperties.h"
 
 namespace ${this.namespace()}
@@ -278,6 +391,7 @@ class Cell : public ${this.dataStruct()},
              public IMSQLBase,
              public IMProperties,
              public IMQtProperties,
+             public IGetXmlExchanger,
              public IMStyle
 {
 public:
@@ -299,6 +413,10 @@ public:
   // IMProperties
   void EnumPropertyPages( MPropertyPageArray& pages ) override;
   CString GetCaptionName() override;
+  OMPCODE GetEditRightCode() const override;
+
+  // IGetXmlExchanger
+  std::shared_ptr< IMXmlExchange > GetXmlExchanger() override;
 
   // IMStyle
   bool GetStyle( CGXStyle& style, OMPCODE HID, CGXStyle& hStyle, MDataManager* pMng, bool readOnly ) override;
@@ -314,6 +432,7 @@ public:
 #include "OmOrdr/${this.entities}Service.h"
 #include "uicore/KMM/MQtPropertyPage.h"
 #include "uicore/SmartClearCopyCell.h"
+#include <Rights.h>
 
 #include "ui_${this.entities}CellPage.h"
 
@@ -403,6 +522,16 @@ void Cell::EnumPropertyPages( MPropertyPageArray& pages )
 CString Cell::GetCaptionName()
 {
   return "${this.entity_hr_name}";
+}
+
+OMPCODE Cell::GetEditRightCode() const
+{
+  return 0;
+}
+
+std::shared_ptr< IMXmlExchange > Cell::GetXmlExchanger()
+{
+  return COmpPtr< I${this.entities}Service >()->GetXmlExchanger( *this );
 }
 
 bool Cell::GetStyle( CGXStyle& style, OMPCODE HID, CGXStyle& hStyle, MDataManager* pMng, bool readOnly )
@@ -633,6 +762,8 @@ public:
   Private( List& q_ ) : q{ q_ }
   {}
 
+  FilterCell& GetFilter();
+
   List& q;
 };
 
@@ -685,6 +816,11 @@ void List::OnMovedCurrentRow( ROWCOL row )
 BOOL List::EnableRefershReportView()
 {
   return TRUE;
+}
+
+FilterCell& List::Private::GetFilter()
+{
+  return dynamic_cast< FilterCell& >( *q.GetFilter() );
 }
 }
 
@@ -905,11 +1041,21 @@ run${this.entities} = "TASK_CODE"fix, // ${this.entities_hr_name}
 OMP_RUN( run${this.entities}, Get${this.entities}Filter, Run${this.entities}List )
 \`\`\`
 
-Add next lines to to \`core/OIDs.h\`:
+Add next lines to \`core/OIDs.h\`:
 \`\`\`cpp
 #define OID_${this.entities}Service (${this.non_ui_lib} + ?)
 
 #define OID_${this.entities}UiService (${this.ui_lib} + ?)
+\`\`\`
+
+Add next line to \`OmMiscUI/XmlDocIDs.h\`
+\`\`\`
+XmlDoc_${this.entity} = _NEW_ID,
+\`\`\`
+
+Add next line to \`OmMiscUI/XmlDocs.h\`
+\`\`\`
+XMLDOC          ( XmlDoc_${this.entity}, ${this.non_ui_lib}, "YOUR_OBJ_NAME"_err )
 \`\`\`
 `;
     }

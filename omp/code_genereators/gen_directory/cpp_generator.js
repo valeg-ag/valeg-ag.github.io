@@ -4,14 +4,14 @@ class DirectoryCppGenerator {
     /**
      * @param {object} opts
      */
-    constructor(opts, columns) {
+    constructor(opts) {
         this.entity = opts.entity;
         this.entities = opts.entities;
         this.entity_hr_name = opts.entity_hr_name;
         this.entities_hr_name = opts.entities_hr_name;
         this.non_ui_lib = opts.non_ui_lib;
         this.ui_lib = opts.ui_lib;
-        this.columns = columns;
+        this.columns = opts.columns;
     }
 
     generate() {
@@ -1089,6 +1089,6 @@ XMLDOC          ( XmlDoc_${this.entity}, ${this.non_ui_lib}, "YOUR_OBJ_NAME"_err
     }
 }
 
-function generateNewDirectoryCpp(opts, columns) {
-    return new DirectoryCppGenerator(opts, columns).generate();
+function generateNewDirectoryCpp(opts) {
+    return new DirectoryCppGenerator(opts).generate();
 }

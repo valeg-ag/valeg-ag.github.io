@@ -6,106 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/highlight.min.js"></script>
-    <script src="./cpp_generator.js"></script>
     <script src="./thirdparty/jszip.min.js"></script>
     <script src="./thirdparty/FileSaver.min.js"></script>
+    <script src="./cpp_generator.js"></script>
+    <script src="./defaultOpts.js"></script>
 
     <script type="text/javascript">
-        let columns = [{
-            columnName: "CODE",
-            columnDataType: "INTEGER",
-            columnDataLength: 0,
-            dataMemberName: "Code",
-            dataMemberType: "OMPCODE",
-            filterMemberName: "Codes",
-            filterMemberType: "long_set"
-        }, {
-            columnName: "NUM",
-            columnDataType: "VARCHAR2",
-            columnDataLength: 256,
-            dataMemberName: "Num",
-            dataMemberType: "COmpStringT",
-            filterMemberName: "Num",
-            filterMemberType: "CLikeSensString"
-        }];
-
-        function addColumn() {
-            generateColumnsTable();
-        }
-
-        function generateColumnsTable() {
-
-            function clearColumnsTable() {
-                const rows = document.getElementById("columns_table").getElementsByClassName("column_row");
-                for (let i = rows.length - 1; i >= 0; i--) {
-                    rows[i].remove();
-                }
-            }
-
-            clearColumnsTable();
-
-            function addTd(row, child) {
-                const tdName = document.createElement("td");
-                tdName.appendChild(child);
-                row.appendChild(tdName);
-            }
-
-            function createLineEdit(value) {
-                const le = document.createElement("input");
-                le.setAttribute("type", "text");
-                le.setAttribute("size", "15");
-                le.setAttribute("value", value);
-
-                return le;
-            }
-
-            function createComboBox(avOptions, selectedOption) {
-                const cb = document.createElement("select");
-                for (const opt of avOptions) {
-                    const optElement = document.createElement("option");
-                    optElement.innerText = opt;
-                    if (opt === selectedOption) {
-                        optElement.toggleAttribute("selected", true);
-                    }
-                    cb.appendChild(optElement);
-                }
-
-                return cb;
-            }
-
-            function createDataLengthElement(col) {
-                if (col.columnDataType === "VARCHAR2") {
-                    return createLineEdit(col.columnDataLength);
-                } else {
-                    return document.createElement("div");
-                }
-            }
-
-            for (const col of columns) {
-                const row = document.getElementById("columns_table").appendChild(document.createElement("tr"));
-                row.classList.add("column_row");
-
-                addTd(row, createLineEdit(col.columnName));
-
-                const colDataTypeElement = createComboBox(["INTEGER", "VARCHAR2"], col.columnDataType);
-                addTd(row, colDataTypeElement);
-
-                addTd(row, createDataLengthElement(col));
-
-                addTd(row, createLineEdit(col.dataMemberName));
-
-                const colDataMemberTypeElement = createComboBox(["OMPCODE", "COmpStringT"], col.dataMemberType);
-                addTd(row, colDataMemberTypeElement);
-
-                addTd(row, createLineEdit(col.filterMemberName));
-
-                const colFilterMemberTypeElement = createComboBox(["long_set", "CLikeSensString"], col.filterMemberType);
-                addTd(row, colFilterMemberTypeElement);
-            }
-        }
-
         function generateCode() {
-            const cppCode = generateNewDirectoryCpp(getOpts(), columns);
+            const cppCode = generateNewDirectoryCpp(getOpts());
             document.getElementById("generated_code").innerHTML = escapeCpp(cppCode);
             hljs.highlightBlock(document.getElementById("generated_code"));
         }
@@ -132,8 +40,7 @@
 
         function save() {
             const opts = getOpts();
-
-            const gen = new DirectoryCppGenerator(getOpts(), columns);
+            const gen = new DirectoryCppGenerator(opts);
 
             const zip = new JSZip();
 
@@ -171,15 +78,7 @@
         }
 
         function getOpts() {
-            const non_ui_lib = document.getElementById("non_ui_lib").value;
-            return {
-                non_ui_lib: non_ui_lib,
-                ui_lib: `${non_ui_lib}UI`,
-                entity: document.getElementById("entity").value,
-                entities: document.getElementById("entities").value,
-                entity_hr_name: document.getElementById("entity_hr_name").value,
-                entities_hr_name: document.getElementById("entities_hr_name").value,
-            };
+            return JSON.parse(document.getElementById('opts').value);
         }
 
         function escapeCpp(cppStr) {
@@ -190,7 +89,9 @@
                 .replace(/'/g, '&apos;');
         }
 
-        window.onload = () => { generateColumnsTable() };
+        window.onload = () => {
+            document.getElementById("opts").value = JSON.stringify(defaultOpts, null, "    ");
+        };
 
     </script>
 
@@ -198,32 +99,8 @@
 </head>
 
 <body>
-    <p><b>$NON-UI-LIB: </b><input type="text" size="40" id="non_ui_lib" value="OmOrdr"></p>
-    <p>
-        <b>$ENTITY: </b> <input type="text" size="40" id="entity" value="Stockobj">
-        <b>$ENTITY (Rus): </b> <input type="text" size="40" id="entity_hr_name" value="Объект учета">
-    </p>
-    <p>
-        <b>$ENTITIES: </b><input type="text" size="40" id="entities" value="Stockobjs">
-        <b>$ENTITIES (Rus): </b> <input type="text" size="40" id="entities_hr_name" value="Объекты учета">
-    </p>
-
-    Columns:
-    <p>
-        <button onclick="addColumn()">Add column</button>
-    </p>
-
-    <table id="columns_table">
-        <tr>
-            <th>Table Column</th>
-            <th>Oracle Data Type</th>
-            <th>Data Length</th>
-            <th>Data Member Name</th>
-            <th>Data Member Type</th>
-            <th>Filter Member Name</th>
-            <th>Filter Member Type</th>
-        </tr>
-    </table>
+    Options: <br>
+    <textarea id="opts" cols="120" rows="20"></textarea>
 
     <p>
         <button onclick="generateCode()">Generate</button>

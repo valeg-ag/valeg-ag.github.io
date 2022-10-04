@@ -1,17 +1,70 @@
 const TAB = "  ";
 
+function getIncludesForDataType(dt) {
+    if (dt === "StockobjAttrsFlt") return [`"OmUtils/StockobjAttrsFlt.h"`];
+
+    return [];
+}
+
+function getIncludesForFilteringDataType(dt) {
+    if (dt === "StockobjAttrsFlt") return [`"OmUtils/StockobjAttrsFlt.h"`];
+
+    return [];
+}
+
+function getIncludeForSerializeXMLData(dt) {
+    if (dt === "StockobjAttrsFlt") return [`"OmUtilsUI/StockobjAttrsFltUiHelper.h"`];
+
+    return [];
+}
+
+function dup(str, length) {
+    const str_ = `${str}`;
+    const spaces_count = length - str_.length;
+    return str_ + " ".repeat(spaces_count > 0 ? spaces_count : 0);
+}
+
+function toSnakeCase(str) {
+    if (!str.length) {
+        return "";
+    }
+
+    let res = str.charAt(0).toLowerCase();
+    for (let i = 1; i < str.length; i++) {
+        if (str.charAt(i).toLowerCase() === str.charAt(i)) {
+            res = res + str.charAt(i);
+        } else {
+            res = res + "_" + str.charAt(i).toLowerCase();
+        }
+    }
+
+    return res;
+}
+
 class DirectoryCppGenerator {
     /**
      * @param {object} opts
      */
-    constructor(opts, columns) {
+    constructor(opts) {
         this.entity = opts.entity;
         this.entities = opts.entities;
         this.entity_hr_name = opts.entity_hr_name;
         this.entities_hr_name = opts.entities_hr_name;
         this.non_ui_lib = opts.non_ui_lib;
         this.ui_lib = opts.ui_lib;
-        this.columns = columns;
+        this.table_name = opts.table_name;
+        this.sequence_name = opts.sequence_name;
+        this.columns = opts.columns;
+
+        if(this.table_name && this.table_name.length > 30) {
+            alert("table_name is too long");
+            throw Error("table_name is too long");
+        }
+
+        if(this.sequence_name && this.sequence_name.length > 30) {
+            alert("sequence_name is too long");
+            throw Error("sequence_name is too long");
+        }
     }
 
     generate() {
@@ -66,7 +119,14 @@ ${this.generateUiServiceCpp()}`
     }
 
     generateDataHeader() {
-        return `#pragma once\n
+        const headers = new Set();
+        for(const col of this.columns) {
+            getIncludesForDataType(col.dataMemberType).forEach(h => headers.add(h));
+            getIncludesForDataType(col.filterMemberType).forEach(h => headers.add(h));
+        }
+
+        return `#pragma once
+${[...headers].map(h => `#include ${h}`).join("\n")}\n
 ${this.generateDataStructCode()}\n
 ${this.generateFilterStructCode()}\n`
     }
@@ -75,6 +135,8 @@ ${this.generateFilterStructCode()}\n`
         return `#pragma once
 #include "./${this.dataHeaderFileName()}"
 #include "OIDs.h"
+
+class IMXmlExchange;
 
 struct I${this.entities}Service : IOmpUnknown
 {
@@ -93,20 +155,23 @@ DECLARE_DEFAULT_OID( I${this.entities}Service, OID_${this.entities}Service );\n`
     }
 
     generateServiceCpp() {
+        const headers = new Set();
+        for(const col of this.columns) {
+            getIncludesForFilteringDataType(col.filterMemberType).forEach(h => headers.add(h));
+        }
+
         return `#include "stdafx.h"
 
 #include "./${this.entities}Service.h"
 #include "./${this.entities}XmlExchanger.h"
+${[...headers].map(h => `#include ${h}`).join("\n")}
 #include "OmUtils/SQLUtils.h"
 #include "core/MFieldDescStorage.h"
 
 namespace ${this.namespace()}
 {
 // clang-format off
-BEGIN_INC_FIELD_DESC_EX( FdImpl, ${this.dataStruct()}, "YOUR_TABLE"fix, "SQ_YOUR_TABLE"fix )
-  AddSqlPK        ( "CODE"             , &Code );
-  AddSqlField     ( "NUM"              , &Num );
-END_INC_FIELD_DESC()
+${this.generateFieldDescCode()}
 // clang-format on
 
 class ServiceImpl : public I${this.entities}Service
@@ -127,13 +192,7 @@ public:
 OMP_OBJECT_ENTRY_AUTO_NS( OID_${this.entities}Service, ${this.namespace()}, ServiceImpl );
 
 // clang-format off
-void FdMakeWhere( TwQuery& query, const ${this.filterStruct()}& flt )
-{
-  using namespace omp::sql;
-
-  filtering( query, flt.Codes, _ac( "A", "CODE" ) );
-  filtering( query, flt.Num, _ac( "A", "NUM" ) );
-}
+${this.generateFdMakeWhereCode()}
 // clang-format on
 
 namespace ${this.namespace()}
@@ -181,10 +240,14 @@ std::unique_ptr< IMXmlExchange > ServiceImpl::GetXmlExchanger( const ${this.data
     }
 
     generateRestAttrsHeader() {
+
+        const restAttrs = this.columns.map(col => {
+            return dup(`#define ${this.entity}RestAttr_${col.dataMemberName}`, 70) + `"${toSnakeCase(col.dataMemberName)}"\n`
+        });
+
         return `#pragma once
 
-#define ${this.entity}RestAttr_Code    "code"
-#define ${this.entity}RestAttr_Num     "num"\n`;
+${restAttrs.join("")}`;
     }
 
     generateRestHeader() {
@@ -217,6 +280,17 @@ public:
     }
 
     generateRestCpp() {
+        const provRestAttrs = this.columns.map(col => {
+            if (col.columnName === "CODE") {
+                return `  itemlist.SetIntegerAttr( ${this.entity}RestAttr_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
+            }
+            if (col.columnDataType === "DATE") {
+                return `  itemlist.SetDateAttr( ${this.entity}RestAttr_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
+            }
+
+            return `  itemlist.Set_SOME_Attr( ${this.entity}RestAttr_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
+        });
+
         return `#include "stdafx.h"
 
 #include "./${this.entities}Rest.h"
@@ -224,6 +298,7 @@ public:
 #include "./${this.entities}Service.h"
 #include "OmUtils/RestObjExchange.h"
 #include "OmUtils/RestObjUtils.h"
+#include "RestApp/Shared/RestDataIDs.h"
 #include "core/coretcontainerutils.h"
 
 namespace ${this.namespace()}
@@ -262,8 +337,7 @@ IMCell* RestObject::Clone() const
 
 void RestObject::ProvideRestObjectAttrs( rest::ExchangeItemList& itemlist )
 {
-  itemlist.SetIntegerAttr( ${this.entity}RestAttr_Code, "Код", &Code );
-  itemlist.SetStringAttr( ${this.entity}RestAttr_Num, "Номер", &Num );
+${provRestAttrs.join("\n")}
 }
 
 omp::vector< rest::ObjectPointer > RestLoader ::LoadRestData( rest::IFilter* filter, rest::RestDataDesc& dataDesc )
@@ -311,6 +385,11 @@ public:
     }
 
     generateXmlExchangerCpp() {
+        const ddxmlAttrs = this.columns.filter(col => col.columnName !== "CODE")
+            .map(col => {
+                return `  DDXml_SOMEDDXML( dx, "${col.columnNameRus}", ${col.dataMemberName} );`;
+            });
+
         return `#include "stdafx.h"
 
 #include "./${this.entities}XmlExchanger.h"
@@ -368,7 +447,7 @@ OMPCODE XmlExchanger::GetXmlDocType()
 
 void XmlExchanger::DoXmlExchange( CXmlDataExchange& dx )
 {
-  DDXml_EOmpString( dx, "Поле", DataMember );
+${ddxmlAttrs.join("\n")}
 }
 
 bool XmlExchanger::SaveHistoryEnabled()
@@ -425,6 +504,14 @@ public:
     }
 
     generateCellCpp() {
+        const getStyleCases = this.columns.filter(col => col.columnName !== "CODE")
+            .map(col => {
+                if(col.columnDataType === "DATE") {
+                    return `    case FilterCell::Hid_${col.dataMemberName}:\n      GSShower( style ).SetDate( CreateDate );\n      return true;`
+                }
+                return `    case FilterCell::Hid_${col.dataMemberName}:\n      style.SetValue( ${col.dataMemberName} );\n      return true;`;
+            });
+
         return `#include "stdafx.h"
 
 #include "./${this.entities}Cell.h"
@@ -538,9 +625,7 @@ bool Cell::GetStyle( CGXStyle& style, OMPCODE HID, CGXStyle& hStyle, MDataManage
 {
   switch( HID )
   {
-    case FilterCell::Hid_Num:
-      style.SetValue( Num );
-      return true;
+${getStyleCases.join("\n\n")}
   }
 
   return IMStyle::GetStyle( style, HID, hStyle, pMng, readOnly );
@@ -557,6 +642,10 @@ void UiCellPage::doDataExchange( QtDataExchange& dx )
     }
 
     generateFilterCellHeader() {
+        let nextHidNum = 1;
+        const hids = this.columns.filter(col => col.columnName !== "CODE")
+            .map(col => `    Hid_${col.dataMemberName} = ${nextHidNum++},`)
+
         return `#pragma once
 #include "${this.dataHeaderFilePath()}"
 #include "uicore/KMM/MQtProperties.h"
@@ -601,16 +690,25 @@ public:
 
   enum enHids
   {
-    Hid_Num = 1,
+${hids.join("\n")}
   };
 };
 }\n`;
     }
 
     generateFilterCellCpp() {
+        const addHeaderCols = this.columns.filter(col => col.columnName !== "CODE")
+            .map(col => `  AddHeaderColumn( header, "${col.columnNameRus}", Hid_${col.dataMemberName} );`);
+
+        const headers = new Set();
+        for (const col of this.columns) {
+            getIncludeForSerializeXMLData(col.filterMemberType).forEach(h => headers.add(h));
+        }
+
         return `#include "stdafx.h"
 
 #include "./${this.entities}FilterCell.h"
+${[...headers].map(h => `#include ${h}`).join("\n")}
 #include "uicore/KMM/MQtPropertyPage.h"
 #include "uicore/SmartClearCopyCell.h"
 
@@ -689,7 +787,9 @@ void FilterCell::SerializeXMLData( XMLNode node, bool bLoad )
 {
   BeginXMLVarGroup( "${this.entities}_FilterCell" );
 
-  SerializeXMLVar( Num );
+${this.columns.filter(col => col.filterMemberName !== "Codes")
+                .map(col => `  SerializeXMLVar( ${col.filterMemberName} );`)
+                .join("\n")}
 }
 
 void FilterCell::EnumHistoryComboQt( omp::vector< COmpString >& hc )
@@ -699,7 +799,8 @@ void FilterCell::EnumHistoryComboQt( omp::vector< COmpString >& hc )
 
 void FilterCell::GetHeader( ITTPArray< CGXStyle >& header )
 {
-  AddHeaderColumn( header, "Номер", Hid_Num );
+${addHeaderCols.join("\n")}
+
   IMHeader::SetWrapText( header, true );
 }
 
@@ -1029,8 +1130,7 @@ omp::shared_vec< ${this.dataStruct()} > ServiceImpl::RunBrowser( const ${this.fi
     }
 
     generateInstructions() {
-        return `
-        #instructions
+        return `#instructions
 
 Add next lines to to \`${this.ui_lib}/${this.ui_lib}Run.cpp\`:
 
@@ -1043,9 +1143,9 @@ OMP_RUN( run${this.entities}, Get${this.entities}Filter, Run${this.entities}List
 
 Add next lines to \`core/OIDs.h\`:
 \`\`\`cpp
-#define OID_${this.entities}Service (${this.non_ui_lib} + ?)
+#define OID_${this.entities}Service (OID_${this.non_ui_lib} + ?)
 
-#define OID_${this.entities}UiService (${this.ui_lib} + ?)
+#define OID_${this.entities}UiService (OID_${this.ui_lib} + ?)
 \`\`\`
 
 Add next line to \`OmMiscUI/XmlDocIDs.h\`
@@ -1055,7 +1155,7 @@ XmlDoc_${this.entity} = _NEW_ID,
 
 Add next line to \`OmMiscUI/XmlDocs.h\`
 \`\`\`
-XMLDOC          ( XmlDoc_${this.entity}, ${this.non_ui_lib}, "YOUR_OBJ_NAME"_err )
+XMLDOC          ( XmlDoc_${this.entity}, ${this.non_ui_lib.substring(2)}, "YOUR_OBJ_NAME"_err )
 \`\`\`
 `;
     }
@@ -1069,6 +1169,31 @@ XMLDOC          ( XmlDoc_${this.entity}, ${this.non_ui_lib}, "YOUR_OBJ_NAME"_err
         const members = this.columns.filter(col => !!col.filterMemberName)
             .map(col => `\n${TAB}${col.filterMemberType} ${col.filterMemberName};`);
         return `struct ${this.filterStruct()} : CCopyClearBase< ${this.filterStruct()} >\n{${members.join("")}\n};`;
+    }
+
+    generateFieldDescCode() {
+        const genAddSqlStmt = (col) => {
+            if(col.columnName === "CODE") {
+                return "AddSqlPK";
+            }
+
+            return "AddSqlField";
+        }
+
+        const fdColumns = this.columns.map(col => `  ${dup(genAddSqlStmt(col), 16)}( ${dup(`"${col.columnName}"`, 19)}, &${col.dataMemberName} );\n`);
+
+        return `BEGIN_INC_FIELD_DESC_EX( FdImpl, ${this.dataStruct()}, "${this.table_name}", "${this.sequence_name}" )
+${fdColumns.join("")}END_INC_FIELD_DESC()`;
+    }
+
+    generateFdMakeWhereCode() {
+
+        const filteringColumns = this.columns.map(col => `  filtering( query, flt.${col.filterMemberName}, _ac( "A", "${col.columnName}" ) );\n`);
+        return `void FdMakeWhere( TwQuery& query, const ${this.filterStruct()}& flt )
+{
+  using namespace omp::sql;
+
+${filteringColumns.join("")}}`;
     }
 
     namespace() { return `${this.entities}`; }
@@ -1089,6 +1214,6 @@ XMLDOC          ( XmlDoc_${this.entity}, ${this.non_ui_lib}, "YOUR_OBJ_NAME"_err
     }
 }
 
-function generateNewDirectoryCpp(opts, columns) {
-    return new DirectoryCppGenerator(opts, columns).generate();
+function generateNewDirectoryCpp(opts) {
+    return new DirectoryCppGenerator(opts).generate();
 }

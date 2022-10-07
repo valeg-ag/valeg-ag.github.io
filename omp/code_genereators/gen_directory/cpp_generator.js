@@ -1,7 +1,10 @@
 const TAB = "  ";
 
 function getIncludesForDataType(dt) {
-    if (dt === "StockobjAttrsFlt") return [`"OmUtils/StockobjAttrsFlt.h"`];
+    switch (dt) {
+        case "StockobjAttrsFlt": return [`"OmUtils/StockobjAttrsFlt.h"`];
+        case "DivsSects": return [`"OmUtils/DivsSects.h"`];
+    }
 
     return [];
 }

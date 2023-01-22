@@ -28,7 +28,8 @@
     ],
     "achieves": [
         {
-            "color": "red",
+            "name": "smoked",
+            "color": "#de2c3e",
             "dates": [
                 "2023.01.02",
                 "2023.01.03",
@@ -36,13 +37,21 @@
             ]
         },
         {
-            "color": "green",
+            "name": "no cigarettes",
+            "color": "#1dbf3d",
             "dates": [
                 "2023.01.01",
                 [
                     "2023.01.05",
-                    "2023.01.19"
+                    "2023.01.21"
                 ]
+            ]
+        },
+        {
+            "name": "no sugar",
+            "color": "#1892f5",
+            "dates": [
+                "2023.01.21"
             ]
         }
     ]

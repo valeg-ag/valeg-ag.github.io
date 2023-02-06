@@ -31,27 +31,18 @@
     ],
     "achieves": [
         {
-            "name": "smoked",
-            "color": "#e06370",
-            "dates": [
-                "2023.01.02",
-                "2023.01.03",
-                "2023.01.04"
-            ]
-        },
-        {
-            "name": "no cigarettes",
+            "name": "c",
             "color": "#1dbf3d",
             "dates": [
                 "2023.01.01",
                 [
                     "2023.01.05",
-                    "2023.02.04"
+                    "2023.02.05"
                 ]
             ]
         },
         {
-            "name": "coffee with sugar",
+            "name": "p",
             "color": "#1892f5",
             "dates": [
                 "2023.01.25",
@@ -64,7 +55,7 @@
             ]
         },
         {
-            "name": "coffee without sugar",
+            "name": "m",
             "color": "#fcc64e",
             "dates": [
                 "2023.01.24"

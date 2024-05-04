@@ -46,6 +46,13 @@
             ]
         },
         {
+            "name": "npacc",
+            "color": "#fcad03",
+            "dates": [
+                "2024.05.04"
+            ]
+        },
+        {
             "name": "slv",
             "color": "#fcba03",
             "dates": [

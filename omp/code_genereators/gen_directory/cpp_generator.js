@@ -44,11 +44,28 @@ function toSnakeCase(str) {
     return res;
 }
 
+function mexNEndls(s, n) {
+    let i = s.length - 1;
+    while (i >= 0 && s[i] === "\n") {
+        i--;
+    }
+
+    let res = "";
+
+    let needAddEndls = n - ((s.length - 1) - i);
+    while (needAddEndls > 0) {
+        res += '\n';
+        needAddEndls--;
+    }
+
+    return res;
+}
+
 class DirectoryCppGenerator {
     /**
      * @param {object} opts
      */
-    constructor(opts) {
+    constructor(opts, use_standard_repo_, use_xml_history_) {
         this.entity = opts.entity;
         this.entities = opts.entities;
         this.entity_hr_name = opts.entity_hr_name;
@@ -58,6 +75,8 @@ class DirectoryCppGenerator {
         this.table_name = opts.table_name;
         this.sequence_name = opts.sequence_name;
         this.columns = opts.columns;
+        this.use_standard_repo = use_standard_repo_;
+        this.use_xml_history = use_xml_history_;
 
         if(this.table_name && this.table_name.length > 30) {
             alert("table_name is too long");
@@ -71,7 +90,8 @@ class DirectoryCppGenerator {
     }
 
     generate() {
-        return `// ${this.dataHeaderFilePath()}
+        let res =
+`// ${this.dataHeaderFilePath()}
 ///////////////////////////////////////////////////////////////////////////////
 ${this.generateDataHeader()}\n\n\n
 // ${this.non_ui_lib}/${this.entities}Service.h
@@ -88,14 +108,20 @@ ${this.generateRestAttrsHeader()}\n\n\n
 ${this.generateRestHeader()}\n\n\n
 // ${this.non_ui_lib}/${this.entities}Rest.cpp
 ///////////////////////////////////////////////////////////////////////////////
-${this.generateRestCpp()}\n\n\n
-// ${this.non_ui_lib}/${this.entities}XmlExchanger.h
+${this.generateRestCpp()}\n\n\n`;
+
+        if (this.use_xml_history) {
+            res += 
+`// ${this.non_ui_lib}/${this.entities}XmlExchanger.h
 ///////////////////////////////////////////////////////////////////////////////
 ${this.generateXmlExchangerHeader()}\n\n\n
 // ${this.non_ui_lib}/${this.entities}XmlExchanger.cpp
 ///////////////////////////////////////////////////////////////////////////////
-${this.generateXmlExchangerCpp()}\n\n\n
-// ${this.ui_lib}/${this.entities}Cell.h
+${this.generateXmlExchangerCpp()}\n\n\n`;
+        }
+
+        res += 
+`// ${this.ui_lib}/${this.entities}Cell.h
 ///////////////////////////////////////////////////////////////////////////////
 ${this.generateCellHeader()}\n\n\n
 // ${this.ui_lib}/${this.entities}Cell.cpp
@@ -119,6 +145,8 @@ ${this.generateUiServiceHeader()}
 // ${this.ui_lib}/${this.entities}UiService.cpp
 ///////////////////////////////////////////////////////////////////////////////
 ${this.generateUiServiceCpp()}`
+
+        return res;
     }
 
     generateDataHeader() {
@@ -128,45 +156,183 @@ ${this.generateUiServiceCpp()}`
             getIncludesForDataType(col.filterMemberType).forEach(h => headers.add(h));
         }
 
-        return `#pragma once
-${[...headers].map(h => `#include ${h}`).join("\n")}\n
-${this.generateDataStructCode()}\n
-${this.generateFilterStructCode()}\n`
+        let res = "#pragma once\n";
+        res += `${[...headers].map(h => `#include ${h}`).join("\n")}\n`;
+        res += mexNEndls(res, 2);
+        res += `${this.generateDataStructCode()}\n\n`;
+        res += `${this.generateFilterStructCode()}\n`;
+
+        return res;
     }
 
     generateServiceHeader() {
-        return `#pragma once
-#include "./${this.dataHeaderFileName()}"
-#include "OIDs.h"
+        let includes = 
+`#include "./${this.dataHeaderFileName()}"
+#include "OIDs.h"`;
 
-class IMXmlExchange;
+        let baseServiceClass = 'IOmpUnknown';
 
-struct I${this.entities}Service : IOmpUnknown
-{
-  virtual void Insert( ${this.dataStruct()}& data ) = 0;
+        if (this.use_standard_repo) {
+            includes +=
+`
+#include "core/StandardRepo.h"`;
+            baseServiceClass = `IStandardRepo< ${this.dataStruct()}, ${this.filterStruct()} >`
+        }
+
+        let crudMethods =
+` virtual void Insert( ${this.dataStruct()}& data ) = 0;
   virtual void Update( ${this.dataStruct()}& data ) = 0;
   virtual void Delete( const ${this.dataStruct()}& data ) = 0;
 
   virtual omp::shared_vec< ${this.dataStruct()} > LoadByCodes( std::set< OMPCODE > codes ) = 0;
   virtual ${this.dataStruct()} LoadByCode( OMPCODE code ) = 0;
   virtual omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) = 0;
+`;
 
+        if (this.use_standard_repo) {
+            crudMethods = '';
+        }
+
+        let xmlExchangeFwdDcl = '';
+        let xmlExchangeMethods = '';
+        if (this.use_xml_history) {
+            xmlExchangeFwdDcl = 
+`class IMXmlExchange;
+
+`;
+            xmlExchangeMethods = 
+`
   virtual std::unique_ptr< IMXmlExchange > GetXmlExchanger( const ${this.dataStruct()}& data ) = 0;
-};
+`;
+        }
+
+        let serviceBody = '{';
+        if (!this.use_standard_repo) {
+            serviceBody +=
+`
+  virtual void Insert( ${this.dataStruct()}& data ) = 0;
+  virtual void Update( ${this.dataStruct()}& data ) = 0;
+  virtual void Delete( const ${this.dataStruct()}& data ) = 0;
+
+  virtual omp::shared_vec< ${this.dataStruct()} > LoadByCodes( std::set< OMPCODE > codes ) = 0;
+  virtual ${this.dataStruct()} LoadByCode( OMPCODE code ) = 0;
+  virtual omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) = 0;`
+        }
+
+        if (this.use_xml_history) {
+            if (serviceBody[serviceBody.length-1] !== '{')
+                serviceBody += '\n';
+    
+            serviceBody +=
+`
+  virtual std::unique_ptr< IMXmlExchange > GetXmlExchanger( const ${this.dataStruct()}& data ) = 0;`;
+        }
+
+        if (serviceBody[serviceBody.length-1] !== '{')
+            serviceBody += '\n';
+
+        serviceBody += '};';
+
+        return `#pragma once
+${includes}
+
+${xmlExchangeFwdDcl}struct I${this.entities}Service : ${baseServiceClass}
+${serviceBody}
 
 DECLARE_DEFAULT_OID( I${this.entities}Service, OID_${this.entities}Service );\n`
     }
 
     generateServiceCpp() {
         const headers = new Set();
+        if (this.use_xml_history)
+            headers.add(`"./${this.entities}XmlExchanger.h"`);
+        if (this.use_standard_repo)
+            headers.add(`"core/StandardRepoFdImpl.h"`);
+
         for(const col of this.columns) {
             getIncludesForFilteringDataType(col.filterMemberType).forEach(h => headers.add(h));
         }
 
-        return `#include "stdafx.h"
+        let baseServiceImplClass = `I${this.entities}Service`;
+        if (this.use_standard_repo) {
+            baseServiceImplClass = `IStandardRepoFdImpl< I${this.entities}Service, FdImpl >`
+
+        }
+
+        let methods = [];
+
+        if (!this.use_standard_repo) {
+            methods.push(`void Insert( ${this.dataStruct()}& data ) override;`);
+            methods.push(`void Update( ${this.dataStruct()}& data ) override;`);
+            methods.push(`void Delete( const ${this.dataStruct()}& data ) override;`)
+            methods.push('');
+            methods.push(`omp::shared_vec< ${this.dataStruct()} > LoadByCodes( std::set< OMPCODE > codes ) override;`);
+            methods.push(`${this.dataStruct()} LoadByCode( OMPCODE code ) override;`);
+            methods.push(`omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) override;`);
+        }
+
+        if (this.use_xml_history) {
+            if (methods.length > 0)
+                methods.push('');
+
+            methods.push(`std::unique_ptr< IMXmlExchange > GetXmlExchanger( const ${this.dataStruct()}& data ) override;`);
+        }
+
+        let methodsImpl = [];
+        if (!this.use_standard_repo) {
+            methodsImpl.push(
+`void ServiceImpl::Insert( ${this.dataStruct()}& data )
+{
+  StorageT().Insert( data );
+}`);
+
+
+            methodsImpl.push(
+`void ServiceImpl::Update( ${this.dataStruct()}& data )
+{
+  StorageT().Update( data );
+}`);
+
+            methodsImpl.push(
+`void ServiceImpl::Delete( const ${this.dataStruct()}& data )
+{
+  StorageT().Delete( data );
+}`);
+
+            methodsImpl.push(
+`${this.dataStruct()} ServiceImpl::LoadByCode( OMPCODE code )
+{
+  return StorageT().LoadByCode( code );
+}`);
+
+            methodsImpl.push(
+`omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByCodes( std::set< OMPCODE > codes )
+{
+  ${this.filterStruct()} flt;
+  flt.Codes = std::move( codes );
+
+  return LoadByFilter( flt );
+}`);
+
+            methodsImpl.push(
+`omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByFilter( const ${this.filterStruct()}& flt )
+{
+  return StorageT().LoadByFilterShared( flt );
+}`);
+}
+
+        if (this.use_xml_history) {
+            methodsImpl.push(
+`std::unique_ptr< IMXmlExchange > ServiceImpl::GetXmlExchanger( const ${this.dataStruct()}& data )
+{
+  return std::make_unique< XmlExchanger >( data );
+}`);
+        }
+
+        let res =
+`#include "stdafx.h"
 
 #include "./${this.entities}Service.h"
-#include "./${this.entities}XmlExchanger.h"
 ${[...headers].map(h => `#include ${h}`).join("\n")}
 #include "OmUtils/SQLUtils.h"
 #include "core/MFieldDescStorage.h"
@@ -177,18 +343,10 @@ namespace ${this.namespace()}
 ${this.generateFieldDescCode()}
 // clang-format on
 
-class ServiceImpl : public I${this.entities}Service
+class ServiceImpl : public ${baseServiceImplClass}
 {
 public:
-  void Insert( ${this.dataStruct()}& data ) override;
-  void Update( ${this.dataStruct()}& data ) override;
-  void Delete( const ${this.dataStruct()}& data ) override;
-
-  omp::shared_vec< ${this.dataStruct()} > LoadByCodes( std::set< OMPCODE > codes ) override;
-  ${this.dataStruct()} LoadByCode( OMPCODE code ) override;
-  omp::shared_vec< ${this.dataStruct()} > LoadByFilter( const ${this.filterStruct()}& flt ) override;
-
-  std::unique_ptr< IMXmlExchange > GetXmlExchanger( const ${this.dataStruct()}& data ) override;
+${methods.map(m=> m.length ? `  ${m}` : '').join("\n")}
 };
 }
 
@@ -197,60 +355,40 @@ OMP_OBJECT_ENTRY_AUTO_NS( OID_${this.entities}Service, ${this.namespace()}, Serv
 // clang-format off
 ${this.generateFdMakeWhereCode()}
 // clang-format on
+`;
 
-namespace ${this.namespace()}
+        if (methodsImpl.length > 0) {
+            res +=
+`namespace ${this.namespace()}
 {
-using StorageT = XmlHistoryFdStorage< FdImpl, ${this.dataStruct()}, ${this.filterStruct()}, XmlExchanger >;
+`;
+            if (this.use_xml_history) {
+                res += 
+`using StorageT = XmlHistoryFdStorage< FdImpl, ${this.dataStruct()}, ${this.filterStruct()}, XmlExchanger >;
+`
+            }
 
-void ServiceImpl::Insert( ${this.dataStruct()}& data )
-{
-  StorageT().Insert( data );
-}
-
-void ServiceImpl::Update( ${this.dataStruct()}& data )
-{
-  StorageT().Update( data );
-}
-
-void ServiceImpl::Delete( const ${this.dataStruct()}& data )
-{
-  StorageT().Delete( data );
-}
-
-${this.dataStruct()} ServiceImpl::LoadByCode( OMPCODE code )
-{
-  return StorageT().LoadByCode( code );
-}
-
-omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByCodes( std::set< OMPCODE > codes )
-{
-  ${this.filterStruct()} flt;
-  flt.Codes = std::move( codes );
-
-  return LoadByFilter( flt );
-}
-
-omp::shared_vec< ${this.dataStruct()} > ServiceImpl::LoadByFilter( const ${this.filterStruct()}& flt )
-{
-  return StorageT().LoadByFilterShared( flt );
-}
-
-std::unique_ptr< IMXmlExchange > ServiceImpl::GetXmlExchanger( const ${this.dataStruct()} & data )
-{
-  return std::make_unique< XmlExchanger >( data );
-}
+            res +=
+`
+${methodsImpl.map(m=> m.length ? `${m}` : '').join("\n\n")}
 }\n`;
+        }
+
+        return res;
     }
 
     generateRestAttrsHeader() {
 
         const restAttrs = this.columns.map(col => {
-            return dup(`#define ${this.entity}RestAttr_${col.dataMemberName}`, 70) + `"${toSnakeCase(col.dataMemberName)}"\n`
+            return `const COmpString ${this.entity}_${col.dataMemberName} = "${toSnakeCase(col.dataMemberName)}";`;
         });
 
         return `#pragma once
 
-${restAttrs.join("")}`;
+namespace rest_attr
+{
+${restAttrs.join("\n")}
+}`;
     }
 
     generateRestHeader() {
@@ -285,13 +423,16 @@ public:
     generateRestCpp() {
         const provRestAttrs = this.columns.map(col => {
             if (col.columnName === "CODE") {
-                return `  itemlist.SetIntegerAttr( ${this.entity}RestAttr_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
+                return `  itemlist.SetIntegerAttr( ${this.entity}_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
             }
-            if (col.columnDataType === "DATE") {
-                return `  itemlist.SetDateAttr( ${this.entity}RestAttr_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
+            else if ( col.dataMemberType.startsWith("COmpString")) {
+                return `  itemlist.SetStringAttr( ${this.entity}_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`;
+            }
+            else if (col.columnDataType === "DATE") {
+                return `  itemlist.SetDateAttr( ${this.entity}_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
             }
 
-            return `  itemlist.Set_SOME_Attr( ${this.entity}RestAttr_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
+            return `  itemlist.Set_SOME_Attr( ${this.entity}_${col.dataMemberName}, "${col.columnNameRus}", &${col.dataMemberName} );`
         });
 
         return `#include "stdafx.h"
@@ -340,6 +481,7 @@ IMCell* RestObject::Clone() const
 
 void RestObject::ProvideRestObjectAttrs( rest::ExchangeItemList& itemlist )
 {
+  using namespace rest_attr;
 ${provRestAttrs.join("\n")}
 }
 
@@ -461,20 +603,39 @@ bool XmlExchanger::SaveHistoryEnabled()
     }
 
     generateCellHeader() {
-        return `#pragma once
-#include "${this.dataHeaderFilePath()}"
-#include "core/kmm/MXmlExchange.h"
-#include "uicore/KMM/MQtProperties.h"
 
-namespace ${this.namespace()}
+        let includes = [`"${this.dataHeaderFilePath()}"`];
+        if (this.use_standard_repo)
+            includes.push(`"MSqlBaseRepo.h"`);
+        if (this.use_xml_history)
+            includes.push(`"core/kmm/MXmlExchange.h"`);
+        includes.push(`"uicore/KMM/MQtProperties.h"`);
+
+        let baseClasses = [`public ${this.dataStruct()}`, `public IMCell`];
+        if (this.use_standard_repo) {
+            baseClasses.push(`public IMSQLBaseRepo< Cell, I${this.entities}Service >`);
+        } else {
+            baseClasses.push(`public IMSQLBase`);
+        }
+        baseClasses.push(`public IMProperties`);
+        baseClasses.push(`public IMQtProperties`);
+        if (this.use_xml_history)
+            baseClasses.push(`public IGetXmlExchanger`);
+        baseClasses.push(`public IMStyle`);
+
+        let res =
+`#pragma once
+${includes.map(i=>`#include ${i}`).join("\n")}
+
+`;
+        if (this.use_standard_repo) {
+            res += `struct I${this.entities}Service;\n\n`
+        }
+
+        res+=
+`namespace ${this.namespace()}
 {
-class Cell : public ${this.dataStruct()},
-             public IMCell,
-             public IMSQLBase,
-             public IMProperties,
-             public IMQtProperties,
-             public IGetXmlExchanger,
-             public IMStyle
+class Cell : ${baseClasses.join(",\n             ")}
 {
 public:
   Cell();
@@ -486,24 +647,41 @@ public:
   void Copy( const IMCell& src ) override;
   IMCell* Clone() const override;
   OMPCODE* GetCodePtr() override;
-
+`
+        if (!this.use_standard_repo) {
+            res += 
+`
   // IMSQLBase
   void InsertRequest( TwQuery& query ) override;
   void UpdateRequest( TwQuery& query ) override;
   void DeleteRequest( TwQuery& query ) override;
+`;
+        }
 
+        res +=
+`
   // IMProperties
   void EnumPropertyPages( MPropertyPageArray& pages ) override;
-  CString GetCaptionName() override;
+  COmpString GetCaptionName() override;
   OMPCODE GetEditRightCode() const override;
+`;
 
+        if (this.use_xml_history) {
+            res +=
+`
   // IGetXmlExchanger
   std::shared_ptr< IMXmlExchange > GetXmlExchanger() override;
+`;
+        }
 
+        res +=
+`
   // IMStyle
   bool GetStyle( CGXStyle& style, OMPCODE HID, CGXStyle& hStyle, MDataManager* pMng, bool readOnly ) override;
 };
 }\n`;
+
+        return res;
     }
 
     generateCellCpp() {
@@ -515,17 +693,24 @@ public:
                 return `    case FilterCell::Hid_${col.dataMemberName}:\n      style.SetValue( ${col.dataMemberName} );\n      return true;`;
             });
 
-        return `#include "stdafx.h"
+        let res = 
+`#include "stdafx.h"
 
 #include "./${this.entities}Cell.h"
 #include "./${this.entities}FilterCell.h"
-#include "OmOrdr/${this.entities}Service.h"
+#include "${this.non_ui_lib}/${this.entities}Service.h"
 #include "uicore/KMM/MQtPropertyPage.h"
 #include "uicore/SmartClearCopyCell.h"
 #include <Rights.h>
 
 #include "ui_${this.entities}CellPage.h"
+`
+        if (this.use_standard_repo) {
+            res += `\ntemplate class IMSQLBaseRepo< Cell, I${this.entities}Service >;\n`;
+        }
 
+        res += 
+`
 namespace
 {
 enum
@@ -572,7 +757,10 @@ OMPCODE* Cell::GetCodePtr()
 {
   return &Code;
 }
-
+`
+        if (!this.use_standard_repo) {
+            res +=
+`
 void Cell::InsertRequest( TwQuery& query )
 {
   COmpPtr< I${this.entities}Service > service;
@@ -590,7 +778,11 @@ void Cell::DeleteRequest( TwQuery& query )
   COmpPtr< I${this.entities}Service > service;
   service->Delete( *this );
 }
+`;
+        }
 
+        res +=
+`
 class UiCellPage : public IQtUiFormMixin< UiCellPage, Ui::${this.entities}CellPage >
 {
 public:
@@ -609,7 +801,7 @@ void Cell::EnumPropertyPages( MPropertyPageArray& pages )
   pages.Add( new MQtPropertyPage( ppMain, this, new UiCellPage( *this ) ) );
 }
 
-CString Cell::GetCaptionName()
+COmpString Cell::GetCaptionName()
 {
   return "${this.entity_hr_name}";
 }
@@ -618,12 +810,20 @@ OMPCODE Cell::GetEditRightCode() const
 {
   return 0;
 }
+`;
 
+        if (this.use_xml_history) {
+            res += 
+`
 std::shared_ptr< IMXmlExchange > Cell::GetXmlExchanger()
 {
   return COmpPtr< I${this.entities}Service >()->GetXmlExchanger( *this );
 }
-
+`;
+        }
+        
+        res +=
+`
 bool Cell::GetStyle( CGXStyle& style, OMPCODE HID, CGXStyle& hStyle, MDataManager* pMng, bool readOnly )
 {
   switch( HID )
@@ -642,6 +842,8 @@ void UiCellPage::doDataExchange( QtDataExchange& dx )
   DDX_QtString( dx, leNum, data.Num );
 }
 }\n`;
+
+        return res;
     }
 
     generateFilterCellHeader() {
@@ -1191,7 +1393,8 @@ ${fdColumns.join("")}END_INC_FIELD_DESC()`;
 
     generateFdMakeWhereCode() {
 
-        const filteringColumns = this.columns.map(col => `  filtering( query, flt.${col.filterMemberName}, _ac( "A", "${col.columnName}" ) );\n`);
+        const filteringColumns = this.columns.filter(col => !!col.filterMemberName)
+            .map(col => `  filtering( query, flt.${col.filterMemberName}, _ac( "A", "${col.columnName}" ) );\n`);
         return `void FdMakeWhere( TwQuery& query, const ${this.filterStruct()}& flt )
 {
   using namespace omp::sql;
@@ -1215,8 +1418,4 @@ ${filteringColumns.join("")}}`;
         }
         return `${col.dataMemberType}`;
     }
-}
-
-function generateNewDirectoryCpp(opts) {
-    return new DirectoryCppGenerator(opts).generate();
 }

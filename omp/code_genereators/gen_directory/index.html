@@ -13,7 +13,14 @@
 
     <script type="text/javascript">
         function generateCode() {
-            const cppCode = generateNewDirectoryCpp(getOpts());
+            const gen = makeDirectoryCppGenerator();
+
+            const instructions = gen.generateInstructions();
+            const cppCode = gen.generate();
+
+            document.getElementById("generated_instructions").innerHTML = escapeCpp(instructions);
+            hljs.highlightBlock(document.getElementById("generated_instructions"));
+
             document.getElementById("generated_code").innerHTML = escapeCpp(cppCode);
             hljs.highlightBlock(document.getElementById("generated_code"));
         }
@@ -40,7 +47,7 @@
 
         function save() {
             const opts = getOpts();
-            const gen = new DirectoryCppGenerator(opts);
+            const gen = makeDirectoryCppGenerator();
 
             const zip = new JSZip();
 
@@ -81,6 +88,12 @@
             return JSON.parse(document.getElementById('opts').value);
         }
 
+        function makeDirectoryCppGenerator() {
+            return new DirectoryCppGenerator(getOpts(),
+                document.getElementById("ch_box_use_standard_repo").checked,
+                document.getElementById("ch_box_use_xml_history").checked);
+        }
+
         function escapeCpp(cppStr) {
             return cppStr.replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
@@ -102,10 +115,24 @@
     Options: <br>
     <textarea id="opts" cols="120" rows="20"></textarea>
 
+    <div>
+        <input type="checkbox" id="ch_box_use_standard_repo" checked>
+        <label for="ch_box_use_standard_repo">Use "IStandardRepo"</label>
+    </div>
+
+    <div>
+        <input type="checkbox" id="ch_box_use_xml_history">
+        <label for="ch_box_use_xml_history">Use "IGetXmlExchanger"</label>
+    </div>
+
     <p>
         <button onclick="generateCode()">Generate</button>
         <button onclick="save()">Save</button>
     </p>
+
+    <pre>
+        <code class="md" id="generated_instructions"></code>
+    </pre>
 
     <pre>
         <code class="cpp" id="generated_code"></code>

@@ -61,11 +61,20 @@ function mexNEndls(s, n) {
     return res;
 }
 
+function push_if(arr, el, cond) {
+    if (cond)
+        arr.push(el);
+}
+
+function includesTopCppStr(includes) {
+    return `${includes.map(i=>i.length ? `#include ${i}` : '').join('\n')}`
+}
+
 class DirectoryCppGenerator {
     /**
      * @param {object} opts
      */
-    constructor(opts, use_standard_repo_, use_xml_history_) {
+    constructor(opts, use_standard_repo_, use_xml_history_, use_properties_in_filter_) {
         this.entity = opts.entity;
         this.entities = opts.entities;
         this.entity_hr_name = opts.entity_hr_name;
@@ -77,6 +86,7 @@ class DirectoryCppGenerator {
         this.columns = opts.columns;
         this.use_standard_repo = use_standard_repo_;
         this.use_xml_history = use_xml_history_;
+        this.use_properties_in_filter = use_properties_in_filter_;
 
         if(this.table_name && this.table_name.length > 30) {
             alert("table_name is too long");
@@ -685,28 +695,38 @@ public:
     }
 
     generateCellCpp() {
+
+        const includes = [
+            `"stdafx.h"`,
+            '',
+            `"./${this.entities}Cell.h"`,
+            `"./${this.entities}FilterCell.h"`,
+            `"${this.non_ui_lib}/${this.entities}Service.h"`
+        ];
+
+        if (this.use_standard_repo) {
+            includes.push(`"MSqlBaseRepoImpl.h"`);
+        }
+
+        includes.push(`"uicore/KMM/MQtPropertyPage.h"`);
+        includes.push(`"uicore/SmartClearCopyCell.h"`);
+        includes.push(`<Rights.h>`);
+        includes.push(``);
+        includes.push(`"ui_${this.entities}CellPage.h"`);
+
         const getStyleCases = this.columns.filter(col => col.columnName !== "CODE")
             .map(col => {
                 if(col.columnDataType === "DATE") {
-                    return `    case FilterCell::Hid_${col.dataMemberName}:\n      GSShower( style ).SetDate( CreateDate );\n      return true;`
+                    return `    case Hid_${col.dataMemberName}:\n      GSShower( style ).SetDate( CreateDate );\n      return true;`
                 }
-                return `    case FilterCell::Hid_${col.dataMemberName}:\n      style.SetValue( ${col.dataMemberName} );\n      return true;`;
+                return `    case Hid_${col.dataMemberName}:\n      style.SetValue( ${col.dataMemberName} );\n      return true;`;
             });
 
         let res = 
-`#include "stdafx.h"
-
-#include "./${this.entities}Cell.h"
-#include "./${this.entities}FilterCell.h"
-#include "${this.non_ui_lib}/${this.entities}Service.h"
-#include "uicore/KMM/MQtPropertyPage.h"
-#include "uicore/SmartClearCopyCell.h"
-#include <Rights.h>
-
-#include "ui_${this.entities}CellPage.h"
+`${includes.map(i=>i.length ? `#include ${i}` : '').join('\n')}
 `
         if (this.use_standard_repo) {
-            res += `\ntemplate class IMSQLBaseRepo< Cell, I${this.entities}Service >;\n`;
+            res += `\ntemplate class IMSQLBaseRepo< ${this.namespace()}::Cell, I${this.entities}Service >;\n`;
         }
 
         res += 
@@ -826,6 +846,7 @@ std::shared_ptr< IMXmlExchange > Cell::GetXmlExchanger()
 `
 bool Cell::GetStyle( CGXStyle& style, OMPCODE HID, CGXStyle& hStyle, MDataManager* pMng, bool readOnly )
 {
+  using namespace ${this.namespace()}::Hids;
   switch( HID )
   {
 ${getStyleCases.join("\n\n")}
@@ -849,24 +870,31 @@ void UiCellPage::doDataExchange( QtDataExchange& dx )
     generateFilterCellHeader() {
         let nextHidNum = 1;
         const hids = this.columns.filter(col => col.columnName !== "CODE")
-            .map(col => `    Hid_${col.dataMemberName} = ${nextHidNum++},`)
+            .map(col => `Hid_${col.dataMemberName} = ${nextHidNum++},`);
 
-        return `#pragma once
-#include "${this.dataHeaderFilePath()}"
-#include "uicore/KMM/MQtProperties.h"
-#include "uicore/KMM/MXMLFilter.h"
-#include "uicore/MBrowserSupport.h"
+        let includes = [];
+        push_if(includes, `"${this.dataHeaderFilePath()}"`, true);
+        push_if(includes, `"uicore/KMM/MQtProperties.h"`, this.use_properties_in_filter);
+        push_if(includes, `"uicore/KMM/MXMLFilter.h"`, true);
+        push_if(includes, `"uicore/MBrowserSupport.h"`, this.use_properties_in_filter);
+
+        let baseClasses = [];
+        push_if(baseClasses, `public ${this.filterStruct()}`, true);
+        push_if(baseClasses, `public IMCell`, true);
+        push_if(baseClasses, `public IMProperties`, this.use_properties_in_filter);
+        push_if(baseClasses, `public IMQtProperties`, this.use_properties_in_filter);
+        push_if(baseClasses, `public IMXMLFilter`, true);
+        push_if(baseClasses, `public IMHeader`, true);
+        push_if(baseClasses, `public IMBrowserSupport`, this.use_properties_in_filter);
+        push_if(baseClasses, `public IMFormManager`, true);
+
+        let res = 
+`#pragma once
+${includesTopCppStr(includes)}
 
 namespace ${this.namespace()}
 {
-class FilterCell : public ${this.filterStruct()},
-                   public IMCell,
-                   public IMProperties,
-                   public IMQtProperties,
-                   public IMXMLFilter,
-                   public IMHeader,
-                   public IMBrowserSupport,
-                   public IMFormManager
+class FilterCell : ${baseClasses.join(',\n                   ')}
 {
 public:
   FilterCell();
@@ -877,28 +905,46 @@ public:
   void Clear() override;
   void Copy( const IMCell& src ) override;
   IMCell* Clone() const override;
+`;
 
+        if (this.use_properties_in_filter) {
+            res +=
+`
   // IMProperties
-  CString GetCaptionName() override;
+  COmpString GetCaptionName() override;
   void EnumPropertyPages( MPropertyPageArray& pages ) override;
+`;
+        }
 
+        res +=
+`
   // IMXMLFilter
   OMPCODE GetReportType() override;
-  void SerializeXMLData( XMLNode node, bool bLoad ) override;
-  void EnumHistoryComboQt( omp::vector< COmpString >& hc ) override;
+`
+        if (this.use_properties_in_filter) {
+            res += `  void SerializeXMLData( XMLNode node, bool bLoad ) override\n;` +
+                   `  void EnumHistoryComboQt( omp::vector< COmpString >& hc ) override;\n`
+        }
 
+        res +=
+`
   // IMHeader
   void GetHeader( ITTPArray< CGXStyle >& header ) override;
 
   // IMFormManager
   void EnumDataTypes( ITLongArray& types ) override;
-
-  enum enHids
-  {
-${hids.join("\n")}
-  };
 };
+
+namespace Hids
+{
+enum enHids
+{
+  ${hids.join("\n  ")}
+};
+}
 }\n`;
+
+        return res;
     }
 
     generateFilterCellCpp() {
@@ -910,24 +956,23 @@ ${hids.join("\n")}
             getIncludeForSerializeXMLData(col.filterMemberType).forEach(h => headers.add(h));
         }
 
-        return `#include "stdafx.h"
+        let includes = [];
+        push_if(includes, `"stdafx.h"`, true);
+        push_if(includes, ``, true);
+        push_if(includes, `"./${this.entities}FilterCell.h"`, true);
+        headers.forEach(h=>includes.push(h));
+        push_if(includes, `"uicore/KMM/MQtPropertyPage.h"`, this.use_properties_in_filter);
+        push_if(includes, `"uicore/SmartClearCopyCell.h"`, true);
+        push_if(includes, ``, this.use_properties_in_filter);
+        push_if(includes, `"ui_${this.entities}FilterPage.h"`, this.use_properties_in_filter);
 
-#include "./${this.entities}FilterCell.h"
-${[...headers].map(h => `#include ${h}`).join("\n")}
-#include "uicore/KMM/MQtPropertyPage.h"
-#include "uicore/SmartClearCopyCell.h"
+        let res = `${includesTopCppStr(includes)}\n\n`
 
-#include "ui_${this.entities}FilterPage.h"
+        if (this.use_properties_in_filter)
+            res += `namespace\n{\nenum\n{\n  ppMain = 1,\n};\n}\n\n`;
 
-namespace
-{
-enum
-{
-  ppMain = 1,
-};
-}
-
-namespace ${this.namespace()}
+        res +=
+`namespace ${this.namespace()}
 {
 FilterCell::FilterCell()
 {
@@ -959,7 +1004,10 @@ IMCell* FilterCell::Clone() const
 {
   return new FilterCell( *this );
 }
-
+`
+        if (this.use_properties_in_filter) {
+            res +=
+`
 class UiFilterPage : public IQtUiFormMixin< UiFilterPage, Ui::${this.entities}FilterPage >
 {
 public:
@@ -973,7 +1021,7 @@ public:
   FilterCell& data;
 };
 
-CString FilterCell::GetCaptionName()
+COmpString FilterCell::GetCaptionName()
 {
   return "${this.entities_hr_name}";
 }
@@ -982,12 +1030,20 @@ void FilterCell::EnumPropertyPages( MPropertyPageArray& pages )
 {
   pages.Add( new MQtPropertyPage( ppMain, this, new UiFilterPage( *this ) ) );
 }
+`
+        }
 
+        res +=
+`
 OMPCODE FilterCell::GetReportType()
 {
   return 123456_СГЕНЕРИРОВАТЬ;
 }
+`
 
+        if (this.use_properties_in_filter) {
+            res +=
+`
 void FilterCell::SerializeXMLData( XMLNode node, bool bLoad )
 {
   BeginXMLVarGroup( "${this.entities}_FilterCell" );
@@ -1001,9 +1057,14 @@ void FilterCell::EnumHistoryComboQt( omp::vector< COmpString >& hc )
 {
   hc.push_back( "cbNum" );
 }
+`;
+        }
 
+        res +=
+`
 void FilterCell::GetHeader( ITTPArray< CGXStyle >& header )
 {
+  using namespace ${this.namespace()}::Hids;
 ${addHeaderCols.join("\n")}
 
   IMHeader::SetWrapText( header, true );
@@ -1011,7 +1072,11 @@ ${addHeaderCols.join("\n")}
 
 void FilterCell::EnumDataTypes( ITLongArray& types )
 {}
+`
 
+        if (this.use_properties_in_filter) {
+            res += 
+`
 void UiFilterPage::onInitDialog( MQtPropertyPageWidget* wgt )
 {}
 
@@ -1019,7 +1084,12 @@ void UiFilterPage::doDataExchange( QtDataExchange& dx )
 {
   DDX_QtLikeSensString( dx, cbNum, cbNumCs, data.Num );
 }
-}\n`;
+`;
+        }
+
+        res += `}\n`;
+
+        return res;
     }
 
     generateListHeader() {
@@ -1035,7 +1105,7 @@ public:
   List();
   ~List() override;
 
-  void GetReportCaptionStr( CString& caption ) override;
+  void GetReportCaptionStr( COmpString& caption ) override;
 
   void LoadData( OMPCODE reporttype, IMCell* flt ) override;
 
@@ -1044,7 +1114,6 @@ public:
   void DefineCustomLocalMenu( CMenu& menu, ROWCOL row, ROWCOL col ) override;
 
   void OnMovedCurrentRow( ROWCOL row ) override;
-  BOOL EnableRefershReportView() override;
 
   OMP_DECLARE_PRIVATE( List );
 };
@@ -1083,7 +1152,7 @@ List::~List()
   delete &d;
 }
 
-void List::GetReportCaptionStr( CString& caption )
+void List::GetReportCaptionStr( COmpString& caption )
 {
   caption = "${this.entities_hr_name}";
 }
@@ -1107,9 +1176,7 @@ IMCell* List::GetNewChild()
 }
 
 void List::DefineCustomLocalMenu( CMenu& menu, ROWCOL row, ROWCOL col )
-{
-  // add_omp_menu_cmd( menu, "Команда", [ this ]() { d.OnCmdHandler(); } );
-}
+{}
 
 void List::OnMovedCurrentRow( ROWCOL row )
 {
@@ -1117,11 +1184,6 @@ void List::OnMovedCurrentRow( ROWCOL row )
 
   // Cell* cell = GetRowDataCast( row );
   // SendReportsReload( cell ? cell->Code : -1, 0, ID_DATATYPE_YOUR_DT );
-}
-
-BOOL List::EnableRefershReportView()
-{
-  return TRUE;
 }
 
 FilterCell& List::Private::GetFilter()

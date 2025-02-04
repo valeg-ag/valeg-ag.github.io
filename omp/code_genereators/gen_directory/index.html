@@ -91,7 +91,8 @@
         function makeDirectoryCppGenerator() {
             return new DirectoryCppGenerator(getOpts(),
                 document.getElementById("ch_box_use_standard_repo").checked,
-                document.getElementById("ch_box_use_xml_history").checked);
+                document.getElementById("ch_box_use_xml_history").checked,
+                document.getElementById("ch_box_use_properties_in_filter").checked);
         }
 
         function escapeCpp(cppStr) {
@@ -123,6 +124,11 @@
     <div>
         <input type="checkbox" id="ch_box_use_xml_history">
         <label for="ch_box_use_xml_history">Use "IGetXmlExchanger"</label>
+    </div>
+
+    <div>
+        <input type="checkbox" id="ch_box_use_properties_in_filter">
+        <label for="ch_box_use_properties_in_filter">Use "IMProperties" in filter</label>
     </div>
 
     <p>

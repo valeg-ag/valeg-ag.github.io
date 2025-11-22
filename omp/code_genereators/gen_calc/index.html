@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/highlight.min.js"></script>
+    <script src="./thirdparty/jszip.min.js"></script>
+    <script src="./thirdparty/FileSaver.min.js"></script>
+    <script src="./cpp_generator.js"></script>
+    <script src="./defaultOpts.js"></script>
+
+    <script type="text/javascript">
+        function generateCode() {
+            const gen = makeCalcCppGenerator();
+
+            const instructions = gen.generateInstructions();
+            const cppCode = gen.generate();
+
+            document.getElementById("generated_instructions").innerHTML = escapeCpp(instructions);
+            hljs.highlightBlock(document.getElementById("generated_instructions"));
+
+            document.getElementById("generated_code").innerHTML = escapeCpp(cppCode);
+            hljs.highlightBlock(document.getElementById("generated_code"));
+        }
+
+        function to1251(str) {
+            let res = [];
+            for (var i = 0; i < str.length; i++) {
+                const c = str.charCodeAt(i);
+                if (c > 127) {
+                    if (c > 1024) {
+                        if (c == 1025) {
+                            c = 1016;
+                        } else if (c == 1105) {
+                            c = 1032;
+                        }
+                        res.push(c - 848);
+                    }
+                } else {
+                    res.push(c);
+                }
+            }
+            return new Uint8Array(res);
+        }
+
+        function save() {
+            const opts = getOpts();
+            const gen = makeCalcCppGenerator();
+
+            const zip = new JSZip();
+
+            zip.file("instructions.md", gen.generateInstructions());
+
+            const cp1251file = (folder, name, str) => {
+                folder.file(name, to1251(str), { binary: true });
+            }
+
+            const nonUiLibFolder = zip.folder(`${opts.non_ui_lib}`);
+            cp1251file(nonUiLibFolder, `${opts.entities}Data.h`, gen.generateDataHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}Service.h`, gen.generateServiceHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}Service.cpp`, gen.generateServiceCpp());
+            cp1251file(nonUiLibFolder, `${opts.entities}RestAttrs.h`, gen.generateRestAttrsHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}Rest.h`, gen.generateRestHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}Rest.cpp`, gen.generateRestCpp());
+            cp1251file(nonUiLibFolder, `${opts.entities}XmlExchanger.h`, gen.generateXmlExchangerHeader());
+            cp1251file(nonUiLibFolder, `${opts.entities}XmlExchanger.cpp`, gen.generateXmlExchangerCpp());
+
+            const uiLibFolder = zip.folder(`${opts.ui_lib}`);
+            cp1251file(uiLibFolder, `${opts.entities}Cell.h`, gen.generateCellHeader());
+            cp1251file(uiLibFolder, `${opts.entities}Cell.cpp`, gen.generateCellCpp());
+            cp1251file(uiLibFolder, `${opts.entities}FilterCell.h`, gen.generateFilterCellHeader());
+            cp1251file(uiLibFolder, `${opts.entities}FilterCell.cpp`, gen.generateFilterCellCpp());
+            cp1251file(uiLibFolder, `${opts.entities}List.h`, gen.generateListHeader());
+            cp1251file(uiLibFolder, `${opts.entities}List.cpp`, gen.generateListCpp());
+            cp1251file(uiLibFolder, `${opts.entities}UiService.h`, gen.generateUiServiceHeader());
+            cp1251file(uiLibFolder, `${opts.entities}UiService.cpp`, gen.generateUiServiceCpp());
+            uiLibFolder.file(`${opts.entities}CellPage.ui`, gen.generateCellPageUi());
+            uiLibFolder.file(`${opts.entities}FilterPage.ui`, gen.generateFilterCellPageUi());
+
+            zip.generateAsync({ type: "blob" }).then(function (content) {
+                saveAs(content, `${opts.entities}.zip`);
+            });
+        }
+
+        function getOpts() {
+            return JSON.parse(document.getElementById('opts').value);
+        }
+
+        function makeCalcCppGenerator() {
+            return new CalcCppGenerator(getOpts());
+        }
+
+        function escapeCpp(cppStr) {
+            return cppStr.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        window.onload = () => {
+            document.getElementById("opts").value = JSON.stringify(defaultOpts, null, "    ");
+        };
+
+    </script>
+
+    <title>new_calc_template</title>
+</head>
+
+<body>
+    Options: <br>
+    <textarea id="opts" cols="120" rows="20"></textarea>
+
+    <p>
+        <button onclick="generateCode()">Generate</button>
+        <button onclick="save()">Save</button>
+    </p>
+
+    <pre>
+        <code class="md" id="generated_instructions"></code>
+    </pre>
+
+    <pre>
+        <code class="cpp" id="generated_code"></code>
+    </pre>
+</body>
+
+</html>

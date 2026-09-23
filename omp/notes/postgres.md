@@ -8,4 +8,4 @@
 ### Создание таблиц
 
 Для pg нужно указывать `tablespace`, но не нужно указывать `storage`, соответственно из скрипта для pg удаляем `storage`.
-<img src="images/create_table_pg_ora_diff.png" alt="Схема архитектуры" width="500">
+<img src="images/create_table_pg_ora_diff.png" alt="Схема архитектуры" width="900">

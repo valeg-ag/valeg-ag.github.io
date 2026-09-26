@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <div id="before-flight-from-minsk">
+        До вылета из Минск: &nbsp;&nbsp;
+        <iframe
+            src="https://free.timeanddate.com/countdown/ialw4rt7/n285/cf12/cm0/cu4/ct0/cs0/ca0/co0/cr0/ss0/cac000/cpc000/pcfff/tcf1d8e7/fs100/szw320/szh135/iso2026-09-27T07:45:00"
+            allowtransparency="true" frameborder="0" width="116" height="31"></iframe>
+        <br /><br />
+    </div>
+
+
+    <div id="before-flight-to-minsk">
+        До вылета в Минск: &nbsp;&nbsp;
+        <iframe
+            src="https://free.timeanddate.com/countdown/ialw4rt7/n285/cf12/cm0/cu4/ct0/cs0/ca0/co0/cr0/ss0/cac000/cpc000/pcfff/tcf1d8e7/fs100/szw320/szh135/iso2026-10-15T15:05:00"
+            allowtransparency="true" frameborder="0" width="116" height="31"></iframe>
+        <br /><br />
+    </div>
+
+
+    До ДР Славы: &nbsp;&nbsp;
+    <iframe
+        src="https://free.timeanddate.com/countdown/ialw4rt7/n285/cf12/cm0/cu1/ct0/cs0/ca0/co0/cr0/ss0/cac000/cpc000/pcfff/tcf1d8e7/fs100/szw320/szh135/iso2026-10-31T00:00:00"
+        allowtransparency="true" frameborder="0" width="26" height="31"></iframe>
+
+    <br /><br /><br />
+
+    До ДР Валика: &nbsp;&nbsp;
+    <iframe
+        src="https://free.timeanddate.com/countdown/ialw4rt7/n285/cf12/cm0/cu1/ct0/cs0/ca0/co0/cr0/ss0/cac000/cpc000/pcfff/tcf1d8e7/fs100/szw320/szh135/iso2026-12-07T00:00:00"
+        allowtransparency="true" frameborder="0" width="26" height="31"></iframe>
+
+    <br /><br /><br />
+
+    До 2027 Нового Года: &nbsp;&nbsp;
+    <iframe
+        src="https://free.timeanddate.com/countdown/ialw4rt7/n285/cf12/cm0/cu1/ct0/cs0/ca0/co0/cr0/ss0/cac000/cpc000/pcfff/tcf1d8e7/fs100/szw320/szh135/iso2027-01-01T00:00:00"
+        allowtransparency="true" frameborder="0" width="26" height="31"></iframe>
+
+    <br /><br /><br />
+
+    <div>
+        До ДР Тани: &nbsp;&nbsp;
+        <iframe
+            src="https://free.timeanddate.com/countdown/ialw4rt7/n285/cf12/cm0/cu1/ct0/cs0/ca0/co0/cr0/ss0/cac000/cpc000/pcfff/tcf1d8e7/fs100/szw320/szh135/iso2027-03-24T00:00:00"
+            allowtransparency="true" frameborder="0" width="34" height="31"></iframe>
+        <br /><br />
+    </div>
+
+
+    <div>
+        До ДР Алеси: &nbsp;&nbsp;
+        <iframe
+            src="https://free.timeanddate.com/countdown/ialw4rt7/n285/cf12/cm0/cu1/ct0/cs0/ca0/co0/cr0/ss0/cac000/cpc000/pcfff/tcf1d8e7/fs100/szw320/szh135/iso2027-06-10T00:00:00"
+            allowtransparency="true" frameborder="0" width="34" height="31"></iframe>
+        <br /><br />
+    </div>
+
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const now = new Date();
+
+            if (now > new Date("2026-09-27T07:45:00")) {
+                const element = document.getElementById("before-flight-from-minsk");
+                if (element) {
+                    element.style.display = "none";
+                }
+            }
+
+
+            if (now > new Date("2026-10-15T15:05:00")) {
+                const element = document.getElementById("before-flight-to-minsk");
+                if (element) {
+                    element.style.display = "none";
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

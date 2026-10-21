@@ -2,8 +2,10 @@
 
 ### Data Types - Типы данных
 
-- `OMPCODE`, `CODE64` - общий double для pg и ora - `NUMERIC`
-- `double` - общий double для pg и ora - `NUMERIC(38, 12)`
+| | Типы в клоде | Типы в БД |
+| --- | --- | --- |
+| Общий целочисленных типов для pg и ora | `OMPCODE`, `CODE64`, `bool` | `NUMERIC` |
+| Общий double для pg и ora | `double` | `NUMERIC(38, 12)` |
 
 ### Создание таблиц
 
